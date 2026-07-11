@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>뭉게의 하늘 여행 — 대기 안정도와 강수</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  /* ============ 기본 ============ */
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background:#FFF8EF;
+    font-family:'Jua','Gowun Dodum',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    touch-action:none; overscroll-behavior:none;
+    user-select:none; -webkit-user-select:none;
+    color:#6B564C;
+  }
+  #stage { position:fixed; inset:0; overflow:hidden; }
+  #game { display:block; width:100%; height:100%; touch-action:none; }
+  #stage.shake { animation:shakeAnim .45s; }
+  @keyframes shakeAnim {
+    0%,100%{transform:translate(0,0)} 15%{transform:translate(-9px,4px)}
+    30%{transform:translate(8px,-5px)} 45%{transform:translate(-6px,-3px)}
+    60%{transform:translate(6px,4px)} 75%{transform:translate(-4px,2px)} 90%{transform:translate(3px,-2px)}
+  }
+  /* 은은한 종이 질감 (feTurbulence 노이즈 타일) */
+  #grain {
+    position:absolute; inset:0; pointer-events:none; z-index:40; opacity:.05; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ============ HUD ============ */
+  #hud { position:absolute; inset:0; pointer-events:none; z-index:50; }
+  .hudCard {
+    background:rgba(255,251,243,.88); border:3px solid #E9CDB4; border-radius:20px;
+    box-shadow:0 3px 0 rgba(214,178,148,.35);
+  }
+  #hearts { position:absolute; top:10px; left:12px; padding:7px 12px; display:flex; gap:5px; align-items:center; }
+  #hearts svg { width:26px; height:24px; }
+  #progress { position:absolute; top:10px; left:50%; transform:translateX(-50%); padding:7px 16px; text-align:center; }
+  #progressDots { display:flex; gap:7px; justify-content:center; }
+  .pdot { width:11px; height:11px; border-radius:50%; background:#EBD9C6; border:2px solid #DCC0A6; transition:all .3s; }
+  .pdot.done { background:#B7E3C8; border-color:#8FCBA8; }
+  .pdot.cur { background:#FBC9A8; border-color:#F0A97E; transform:scale(1.3); }
+  #chapterName { font-size:13px; margin-top:3px; color:#9A7E6E; letter-spacing:.5px; }
+  #meters { position:absolute; top:10px; right:74px; padding:6px 14px; display:flex; gap:14px; }
+  .meter { text-align:center; min-width:64px; }
+  .meter .lab { font-size:12px; color:#A98D77; }
+  .meter .val { font-size:22px; line-height:1.05; color:#5F4B41; font-variant-numeric:tabular-nums; }
+  .meter .val small { font-size:13px; }
+  #mTd .val { color:#6E86B8; }
+  #mT .val { color:#D97F62; }
+  #muteBtn {
+    position:absolute; top:10px; right:12px; width:52px; height:52px; border-radius:18px;
+    background:rgba(255,251,243,.9); border:3px solid #E9CDB4; box-shadow:0 3px 0 rgba(214,178,148,.35);
+    font-size:24px; pointer-events:auto; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  #muteBtn:active { transform:translateY(2px); box-shadow:none; }
+
+  /* ============ 토스트 / 배지 ============ */
+  #toast {
+    position:absolute; top:20%; left:50%; transform:translate(-50%,0) scale(.8); z-index:60;
+    background:rgba(255,247,236,.96); border:3px solid #F1B9A3; color:#C96A4E;
+    padding:12px 26px; border-radius:24px; font-size:22px; opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s; text-align:center; box-shadow:0 4px 0 rgba(214,150,128,.3);
+    max-width:82%;
+  }
+  #toast.show { opacity:1; transform:translate(-50%,0) scale(1); }
+  #toast.good { border-color:#9FD6B4; color:#4E9A6E; box-shadow:0 4px 0 rgba(140,196,164,.35); }
+
+  /* ============ 대화창 ============ */
+  #dialogWrap { position:absolute; inset:0; z-index:70; display:none; }
+  #dialogWrap.on { display:block; }
+  #dialogBox {
+    position:absolute; left:50%; bottom:22px; transform:translateX(-50%);
+    width:min(760px, 92%); min-height:104px;
+    background:rgba(255,252,246,.97); border:4px solid #E4C3A6; border-radius:28px;
+    box-shadow:0 5px 0 rgba(210,172,140,.35);
+    display:flex; align-items:center; gap:14px; padding:14px 20px 14px 14px;
+  }
+  #dFace { width:76px; height:76px; flex:none; }
+  #dFace svg { width:100%; height:100%; }
+  #dName { position:absolute; top:-16px; left:26px; background:#FBD3AE; border:3px solid #E8B488;
+    border-radius:14px; padding:2px 14px; font-size:15px; color:#8A5F3E; }
+  #dText { font-size:clamp(17px, 2.6vh, 22px); line-height:1.5; color:#5F4B41; flex:1; }
+  #dText b { color:#D9784F; }
+  #dText .kw { color:#5D7FB8; }
+  #dNext { position:absolute; right:20px; bottom:8px; font-size:18px; color:#D9A87F; animation:bob 1s infinite; }
+  @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(4px)} }
+
+  /* ============ 오버레이 (타이틀·지도·재도전·엔딩) ============ */
+  #overlay { position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center; }
+  #overlay.on { display:flex; }
+  .panel {
+    background:rgba(255,251,243,.97); border:4px solid #E4C3A6; border-radius:32px;
+    box-shadow:0 6px 0 rgba(210,172,140,.35); padding:26px 34px; text-align:center;
+    max-width:min(860px, 94%); max-height:92%; overflow:hidden auto; touch-action:pan-y;
+  }
+  .panel h1 { font-size:clamp(30px,6vh,46px); color:#D9784F; letter-spacing:1px; }
+  .panel h2 { font-size:clamp(22px,4.4vh,30px); color:#C96A4E; margin-bottom:8px; }
+  .panel p  { font-size:clamp(15px,2.6vh,19px); color:#8A7263; line-height:1.55; }
+  .btn {
+    font-family:inherit; font-size:clamp(18px,3vh,23px); color:#7C5A3E; cursor:pointer;
+    background:linear-gradient(#FFE3C2,#FBD0A5); border:3px solid #E8B488; border-radius:22px;
+    padding:12px 34px; margin:8px 6px 0; box-shadow:0 4px 0 rgba(214,158,110,.5);
+  }
+  .btn:active { transform:translateY(3px); box-shadow:none; }
+  .btn.sub { background:linear-gradient(#EAF3FF,#D8E7FA); border-color:#AFC8E8; color:#57729B; box-shadow:0 4px 0 rgba(150,178,215,.5); }
+  .btn.mint { background:linear-gradient(#E2F7E9,#C8EDD6); border-color:#96D2AE; color:#3E8A62; box-shadow:0 4px 0 rgba(130,190,155,.5); }
+  .btn:disabled { opacity:.42; box-shadow:none; cursor:default; }
+  .titleSub { font-size:clamp(16px,2.8vh,20px); color:#9A7E6E; margin:4px 0 12px; }
+  #titleArt { width:min(300px,38vh); height:auto; margin:6px auto; display:block; }
+
+  /* 여정 지도 */
+  #mapSvg { width:min(780px, 88vw); height:auto; display:block; margin:4px auto; }
+  .mapLabel { font-size:13.5px; fill:#7A6152; }
+  .mapLabelBig { font-size:15px; fill:#C96A4E; }
+
+  /* 6장: 비교 카드 & 그래프 */
+  .cmpRow { display:flex; gap:16px; justify-content:center; margin:10px 0 4px; flex-wrap:wrap; }
+  .cmpCard { border-radius:22px; padding:12px 20px; min-width:200px; border:3px solid; }
+  .cmpCard h3 { font-size:19px; margin-bottom:4px; }
+  .cmpCard .big { font-size:32px; font-variant-numeric:tabular-nums; }
+  .cmpCard.cool { background:#EAF4FF; border-color:#AFCBE8; color:#4E6E9C; }
+  .cmpCard.hot  { background:#FFEDE2; border-color:#F0B597; color:#C9603C; }
+  #graphCv { background:#FFFDF8; border:3px solid #EAD3BC; border-radius:18px; margin-top:8px;
+    width:min(720px, 86vw, 81vh); height:auto; display:block; margin-left:auto; margin-right:auto; }
+
+  /* 7장 시뮬레이터 패널 */
+  #simPanel {
+    position:absolute; left:12px; bottom:12px; z-index:55; pointer-events:auto;
+    background:rgba(255,251,243,.94); border:3px solid #E4C3A6; border-radius:24px;
+    padding:12px 18px; width:min(360px, 44vw); box-shadow:0 4px 0 rgba(210,172,140,.3);
+    display:none;
+  }
+  #simPanel.on { display:block; }
+  #simPanel .row { display:flex; align-items:center; gap:10px; margin:6px 0; flex-wrap:wrap; }
+  #simPanel label { font-size:16px; color:#8A6A52; }
+  #gammaVal { font-size:22px; color:#D9784F; min-width:96px; font-variant-numeric:tabular-nums; }
+  #gammaSlider { flex:1; min-width:120px; accent-color:#F0A97E; height:34px; }
+  .chip { font-family:inherit; font-size:15px; border-radius:14px; border:2px solid #CBB49B; background:#FFF3E4;
+    color:#8A6A52; padding:5px 12px; cursor:pointer; }
+  .chip.sel { background:#FBD0A5; border-color:#E8A66F; color:#7C4E28; }
+  #pokeBtn { font-size:19px; }
+  #stabRead { font-size:17px; color:#57729B; line-height:1.4; min-height:44px; }
+
+  /* 세로 화면 경고 */
+  #rotate {
+    position:fixed; inset:0; z-index:999; display:none; flex-direction:column; gap:14px;
+    align-items:center; justify-content:center; background:#FFF3E2; text-align:center;
+  }
+  #rotate .ph { font-size:64px; animation:rot 1.6s ease-in-out infinite; }
+  @keyframes rot { 0%,20%{transform:rotate(0)} 60%,100%{transform:rotate(90deg)} }
+  #rotate p { font-size:22px; color:#8A6A52; }
+  @media (orientation: portrait) {
+    #rotate { display:flex; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+  <div id="grain"></div>
+
+  <div id="hud">
+    <div id="hearts" class="hudCard"></div>
+    <div id="progress" class="hudCard">
+      <div id="progressDots"></div>
+      <div id="chapterName"></div>
+    </div>
+    <div id="meters" class="hudCard">
+      <div class="meter" id="mAlt"><div class="lab">고도</div><div class="val">0.00<small> km</small></div></div>
+      <div class="meter" id="mT"><div class="lab">기온</div><div class="val">20.0<small> ℃</small></div></div>
+      <div class="meter" id="mTd"><div class="lab">이슬점</div><div class="val">12.0<small> ℃</small></div></div>
+    </div>
+    <button id="muteBtn" title="소리 켜기/끄기">🔊</button>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="dialogWrap">
+    <div id="dialogBox">
+      <div id="dName">뭉게</div>
+      <div id="dFace"></div>
+      <div id="dText"></div>
+      <div id="dNext">▼ 탭</div>
+    </div>
+  </div>
+
+  <div id="simPanel">
+    <div class="row">
+      <label>기온 감률 γ</label><span id="gammaVal">8.0 ℃/km</span>
+    </div>
+    <div class="row">
+      <input type="range" id="gammaSlider" min="3" max="12" step="0.1" value="8">
+    </div>
+    <div class="row">
+      <button class="chip" data-g="4">안정 4</button>
+      <button class="chip" data-g="8">중간 8</button>
+      <button class="chip" data-g="12">불안정 12</button>
+      <button class="btn mint" id="pokeBtn" style="margin:0 0 0 auto;padding:8px 18px;">👉 쿡 찔러보기</button>
+    </div>
+    <div id="stabRead">뭉게를 찔러 올려 보세요!</div>
+    <div class="row"><button class="btn sub" id="simEndBtn" style="margin:2px auto 0;padding:8px 22px;font-size:17px;">여행 끝내기 ✨</button></div>
+  </div>
+
+  <div id="overlay"></div>
+</div>
+
+<div id="rotate">
+  <div class="ph">📱</div>
+  <p>태블릿을 <b>가로로</b> 돌려 주세요!<br>뭉게의 하늘 여행은 가로 화면 전용이에요.</p>
+</div>
+<script>
+'use strict';
+/* ============================================================
+   「뭉게의 하늘 여행」 — 대기 안정도와 강수 스토리 어드벤처
+   ------------------------------------------------------------
+   ★ 교사용 난이도 조정: 아래 CONFIG 객체의 숫자만 바꾸면 됩니다.
+   ★ 과학 수치(감률·응결 고도 공식)는 PHYSICS 블록에 있으며
+     교과서 값이므로 변경하지 마세요.
+   ============================================================ */
+const CONFIG = {
+  hearts: 5,                 // 시작 하트 수 (여정 전체 공유)
+  dragFollow: 7.5,           // 드래그 따라오는 속도(클수록 민첩)
+  grabRadius: 110,           // 뭉게를 잡을 수 있는 반경(px)
+
+  ch1: {
+    zoneCenter: 1.0,         // 목표 고도(km)
+    zoneHalf: 0.15,          // 허용 오차(±km)
+    holdSec: 3,              // 존 안에서 버텨야 하는 시간(초)
+    overshootKm: 0.4,        // 존 위끝에서 이만큼 더 지나치면 하트 -1
+    maxFallKmPerSec: 1.5,    // 이보다 빠른 급강하 → 하트 -1
+  },
+  ch2: {
+    zoneCenter: 1.0,         // 응결 고도(km) = ⅛(20-12)
+    zoneHalf: 0.10,
+    holdSec: 2,
+    escapeAlt: 1.5,          // 이 고도 이상 이탈하면 실수 1회
+    escapesPerHeart: 2,      // 이탈 2회마다 하트 -1
+  },
+  ch3: {
+    bandHalfKm: 0.14,        // 가이드 밴드 반폭(km)
+    offBandGraceSec: 1.0,    // 밴드 이탈 허용 시간(초)
+    clearAltKm: 1.95,        // 정상 도달 판정 고도
+  },
+  ch4: {
+    bpm: 105,                // 리듬 BGM 템포
+    totalNotes: 20,
+    needHits: 14,            // 클리어에 필요한 성공 수
+    hitWindowMs: 170,        // 판정 창(±ms)
+    missesPerHeart: 2,       // miss 2회마다 하트 -1
+    fallSec: 1.7,            // 노트 낙하 시간(초)
+  },
+  ch5: {
+    maxLandKmPerSec: 0.8,    // 착지 허용 하강 속도(km/s)
+    sinkKmPerSec: 0.45,      // 놓았을 때 자연 하강 속도
+  },
+  ch7: {
+    buoyAccel: 0.35,         // 부력 가속 계수 (km/s² per ℃)
+    pokePowers: [0.55, 0.85, 1.25], // 연속 찌르기 세기(km/s)
+  },
+};
+
+/* ============================================================
+   PHYSICS — 순수 계산 함수 (교과서 값. tests/physics.test.mjs 가 검증)
+   ============================================================ */
+// ==PHYSICS-START==
+const RATE = {
+  DRY: 10,   // 건조 단열 감률 ℃/km (불포화 공기 상승 -10, 하강 +10)
+  DEW: 2,    // 불포화 공기 이슬점 감률 ℃/km
+  WET: 5,    // 습윤 단열 감률 ℃/km (포화 공기: 기온·이슬점 모두)
+};
+const SCENARIO = {
+  T0: 20,    // 출발(영동 해안) 기온 ℃
+  Td0: 12,   // 출발 이슬점 ℃
+  TOP: 2.0,  // 태백산맥 높이 km
+};
+// 상승 응결 고도 H(km) = ⅛(T - Td)
+function lclHeight(T, Td) { return (T - Td) / 8; }
+// 지표 (T0, Td0)의 공기가 h(km)까지 '상승'했을 때의 상태
+function riseState(T0, Td0, h) {
+  const H = lclHeight(T0, Td0);
+  if (h < H) {
+    return { T: T0 - RATE.DRY * h, Td: Td0 - RATE.DEW * h, saturated: false, H };
+  }
+  const Tc = T0 - RATE.DRY * H;            // 응결 고도의 기온(=이슬점)
+  const v = Tc - RATE.WET * (h - H);       // 그 위로는 습윤 단열
+  return { T: v, Td: v, saturated: true, H };
+}
+// 산꼭대기(hTop, 기온 Ttop, 이슬점 TdTop)에서 h(km)까지 '하강'(불포화)한 상태
+function descendFrom(Ttop, TdTop, hTop, h) {
+  const dh = hTop - h;
+  return { T: Ttop + RATE.DRY * dh, Td: TdTop + RATE.DEW * dh, saturated: false };
+}
+// 환경 기온 감률 γ(℃/km)에 따른 대기 안정도
+function stability(gamma) {
+  if (gamma < RATE.WET) return 'stable';        // γ < 5 절대 안정
+  if (gamma > RATE.DRY) return 'unstable';      // γ > 10 절대 불안정
+  return 'conditional';                          // 5~10 조건부 불안정
+}
+// 지표 기온 T0, 감률 γ일 때 고도 h의 환경(주위) 기온
+function envTemp(T0, gamma, h) { return T0 - gamma * h; }
+// ==PHYSICS-END==
+
+/* ============================================================
+   유틸
+   ============================================================ */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => t * t * (3 - 2 * t);
+const fmt1 = v => (Math.round(v * 10) / 10).toFixed(1);
+const fmt2 = v => (Math.round(v * 100) / 100).toFixed(2);
+const TAU = Math.PI * 2;
+const $ = id => document.getElementById(id);
+
+// 손그림 느낌 blob 경로 (seed 기반 일그러짐 + 느린 숨쉬기)
+function blobPath(ctx, cx, cy, r, seed, t, amp = 0.10, pts = 9) {
+  ctx.beginPath();
+  const nodes = [];
+  for (let i = 0; i < pts; i++) {
+    const a = (i / pts) * TAU;
+    const w = 1 + amp * Math.sin(seed * 3.1 + i * 2.7) + 0.035 * Math.sin(t * 1.4 + i * 1.9 + seed);
+    nodes.push({ x: cx + Math.cos(a) * r * w, y: cy + Math.sin(a) * r * w });
+  }
+  const mid = (a, b) => [(a.x + b.x) / 2, (a.y + b.y) / 2];
+  ctx.moveTo(...mid(nodes[0], nodes[1]));
+  for (let i = 1; i <= pts; i++) {
+    const p = nodes[i % pts], nx = nodes[(i + 1) % pts];
+    ctx.quadraticCurveTo(p.x, p.y, ...mid(p, nx));
+  }
+  ctx.closePath();
+}
+// 구형 태블릿 브라우저 대비 roundRect 폴리필
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    this.moveTo(x + r, y);
+    this.lineTo(x + w - r, y); this.arcTo(x + w, y, x + w, y + r, r);
+    this.lineTo(x + w, y + h - r); this.arcTo(x + w, y + h, x + w - r, y + h, r);
+    this.lineTo(x + r, y + h); this.arcTo(x, y + h, x, y + h - r, r);
+    this.lineTo(x, y + r); this.arcTo(x, y, x + r, y, r);
+    return this;
+  };
+}
+
+/* ============================================================
+   사운드 — Web Audio API 로 전부 생성 (음원 파일 없음)
+   ============================================================ */
+const AudioSys = {
+  ctx: null, master: null, muted: false,
+  bgmName: null, bgmTimer: null, nextBeat: 0, beatIdx: 0, beatSec: 0.6,
+  bgmStartTime: 0,
+
+  ensure() {
+    if (!this.ctx) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.muted ? 0 : 0.85;
+        this.master.connect(this.ctx.destination);
+      } catch (e) { this.ctx = null; }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  now() { return this.ctx ? this.ctx.currentTime : performance.now() / 1000; },
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.85, this.now(), 0.05);
+  },
+  tone(f, t0, dur, { type = 'sine', g = 0.15, f2 = null, attack = 0.01 } = {}) {
+    if (!this.ctx) return;
+    const o = this.ctx.createOscillator(), gn = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    gn.gain.setValueAtTime(0.0001, t0);
+    gn.gain.linearRampToValueAtTime(g, t0 + attack);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(gn); gn.connect(this.master);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  },
+  noiseBuf: null,
+  noise(t0, dur, g = 0.1, hp = 3000) {
+    if (!this.ctx) return;
+    if (!this.noiseBuf) {
+      const b = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.5, this.ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this.noiseBuf = b;
+    }
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const f = this.ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
+    const gn = this.ctx.createGain();
+    gn.gain.setValueAtTime(g, t0);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  /* --- 효과음 --- */
+  sTick() { this.tone(1250, this.now(), 0.03, { type: 'square', g: 0.022 }); },
+  sSparkle() { const t = this.now(); this.tone(880, t, 0.12, { g: 0.1 }); this.tone(1320, t + 0.07, 0.18, { g: 0.09 }); this.tone(1760, t + 0.14, 0.25, { g: 0.07 }); },
+  sPop() { this.tone(520, this.now(), 0.1, { type: 'triangle', g: 0.12, f2: 780 }); },
+  sHit() { const t = this.now(); this.tone(988, t, 0.09, { type: 'triangle', g: 0.14 }); this.noise(t, 0.08, 0.05, 5000); },
+  sMiss() { this.tone(180, this.now(), 0.25, { type: 'sawtooth', g: 0.07, f2: 110 }); },
+  sHeart() { const t = this.now(); this.tone(392, t, 0.16, { type: 'triangle', g: 0.13 }); this.tone(311, t + 0.14, 0.3, { type: 'triangle', g: 0.13 }); },
+  sCondense() { const t = this.now(); [523, 659, 784, 1047].forEach((f, i) => this.tone(f, t + i * 0.09, 0.35, { g: 0.1 })); this.noise(t, 0.5, 0.03, 6000); },
+  sClear() { const t = this.now(); [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, t + i * 0.11, 0.4, { type: 'triangle', g: 0.12 })); },
+  sBadge() { const t = this.now(); this.tone(660, t, 0.12, { g: 0.1 }); this.tone(990, t + 0.1, 0.2, { g: 0.1 }); },
+  sThud() { const t = this.now(); this.tone(90, t, 0.3, { type: 'sine', g: 0.2, f2: 50 }); this.noise(t, 0.15, 0.08, 800); },
+  sWhoosh() { this.noise(this.now(), 0.4, 0.05, 1500); },
+
+  /* --- BGM: 챕터별 앰비언트 루프 --- */
+  PATTERNS: {
+    sea:  { bpm: 56,  fn(b, t, A) { // 느린 파도 패드
+      if (b % 4 === 0) { const root = (b % 8 === 0) ? 261.6 : 220;
+        [1, 1.5, 2].forEach(m => A.tone(root * m, t, 3.4, { g: 0.045, attack: 0.9 })); }
+      if (b % 8 === 4) A.noise(t, 2.2, 0.012, 900);
+    }},
+    rise: { bpm: 92,  fn(b, t, A) { // 가벼운 아르페지오
+      const seq = [523, 659, 784, 880, 784, 659]; A.tone(seq[b % 6], t, 0.5, { type: 'triangle', g: 0.05 });
+      if (b % 4 === 0) A.tone(131, t, 1.8, { g: 0.05, attack: 0.4 });
+    }},
+    mtn:  { bpm: 84,  fn(b, t, A) { // 산: 조금 장엄한 저음 + 종소리
+      if (b % 4 === 0) { const root = (b % 8 === 0) ? 174.6 : 196;
+        A.tone(root, t, 2.6, { g: 0.055, attack: 0.5 }); A.tone(root * 1.5, t, 2.6, { g: 0.035, attack: 0.5 }); }
+      if (b % 2 === 1) A.tone(1047, t, 0.4, { g: 0.028 });
+    }},
+    rain: { bpm: CONFIG.ch4.bpm, fn(b, t, A) { // 리듬 장: 명확한 비트 (노트 판정과 동기)
+      A.tone(220, t, 0.1, { type: 'sine', g: b % 2 === 0 ? 0.16 : 0.0, f2: 55 });   // kick
+      A.noise(t + 0.5 * (60 / this.bpm), 0.05, 0.03, 7000);                          // hat(뒷박)
+      if (b % 4 === 2) A.noise(t, 0.09, 0.05, 3000);                                 // snare
+      const bass = [110, 110, 98, 87][Math.floor(b / 4) % 4];
+      if (b % 2 === 0) A.tone(bass, t, 0.4, { type: 'triangle', g: 0.07 });
+    }},
+    warm: { bpm: 60,  fn(b, t, A) { // 따뜻한 화음
+      if (b % 4 === 0) { const ch = (b % 8 === 0) ? [261.6, 329.6, 392, 493.9] : [349.2, 440, 523.3, 659.3];
+        ch.forEach(f => A.tone(f, t, 3.6, { g: 0.038, attack: 0.8 })); }
+    }},
+  },
+  startBgm(name) {
+    this.stopBgm();
+    if (!this.ctx) return 0;
+    const p = this.PATTERNS[name]; if (!p) return 0;
+    this.bgmName = name;
+    this.beatSec = 60 / p.bpm;
+    this.beatIdx = 0;
+    this.bgmStartTime = this.now() + 0.15;
+    this.nextBeat = this.bgmStartTime;
+    this.bgmTimer = setInterval(() => {
+      const ahead = this.now() + 0.3;
+      while (this.nextBeat < ahead) {
+        p.fn.call(p, this.beatIdx, this.nextBeat, this);
+        this.beatIdx++; this.nextBeat += this.beatSec;
+      }
+    }, 60);
+    return this.bgmStartTime;
+  },
+  stopBgm() {
+    if (this.bgmTimer) { clearInterval(this.bgmTimer); this.bgmTimer = null; }
+    this.bgmName = null;
+  },
+};
+</script>
+<script>
+'use strict';
+/* ============================================================
+   전역 상태 (메모리 전용 — 새로고침하면 초기화, 저장소 사용 안 함)
+   ============================================================ */
+const S = {
+  screen: 'title',        // title | play
+  chapter: 0,
+  hearts: CONFIG.hearts,
+  started: false,         // 이어하기 활성화 여부
+  dialogActive: false,
+  paused: false,          // 오버레이 표시 중 게임 정지
+  mapLabels: [],          // 여정 지도에 누적되는 수치 라벨
+  time: 0,
+};
+
+const CH_NAMES = [
+  '프롤로그 · 바다에서 태어난 뭉게', '1장 · 첫 비행', '2장 · 구름 옷',
+  '3장 · 태백산맥의 벽', '4장 · 비를 뿌려라', '5장 · 산 너머로',
+  '6장 · 뜨거워진 뭉게', '에필로그 · 하늘의 성격',
+];
+
+/* ============================================================
+   캔버스
+   ============================================================ */
+const cv = $('game');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (scene && scene.resize) scene.resize();
+}
+window.addEventListener('resize', resize);
+
+/* ============================================================
+   HUD
+   ============================================================ */
+function renderHearts() {
+  const full = `<svg viewBox="0 0 24 22"><path d="M12 20 C5 14 1.5 10.5 1.5 6.8 1.5 3.9 3.8 1.8 6.5 1.8 8.7 1.8 10.8 3.2 12 5.2 13.2 3.2 15.3 1.8 17.5 1.8 20.2 1.8 22.5 3.9 22.5 6.8 22.5 10.5 19 14 12 20Z" fill="#F58C8C" stroke="#D96A6A" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+  const empty = full.replace('#F58C8C', '#EEE0D2').replace('#D96A6A', '#D8C4B0');
+  $('hearts').innerHTML = Array.from({ length: CONFIG.hearts }, (_, i) => i < S.hearts ? full : empty).join('');
+}
+function renderProgress() {
+  $('progressDots').innerHTML = CH_NAMES.map((_, i) =>
+    `<div class="pdot ${i < S.chapter ? 'done' : i === S.chapter ? 'cur' : ''}"></div>`).join('');
+  $('chapterName').textContent = CH_NAMES[S.chapter];
+}
+function setMeters(alt, T, Td) {
+  $('mAlt').querySelector('.val').innerHTML = `${fmt2(alt)}<small> km</small>`;
+  $('mT').querySelector('.val').innerHTML = `${fmt1(T)}<small> ℃</small>`;
+  $('mTd').querySelector('.val').innerHTML = `${fmt1(Td)}<small> ℃</small>`;
+}
+
+let toastTimer = null;
+function toast(msg, good = false, ms = 1900) {
+  const el = $('toast');
+  el.innerHTML = msg; el.classList.toggle('good', good); el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+function shake() {
+  const st = $('stage');
+  st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake');
+}
+
+/* ============================================================
+   하트 감소 / 챕터 재시작
+   ============================================================ */
+let heartLossGuard = 0; // 연속 감점 방지 타임스탬프
+function loseHeart(reason) {
+  if (S.time - heartLossGuard < 0.9) return;
+  heartLossGuard = S.time;
+  S.hearts = Math.max(0, S.hearts - 1);
+  renderHearts(); shake(); AudioSys.sHeart();
+  M.setFace('hurt', 1.4);
+  toast('💔 ' + reason);
+  if (S.hearts <= 0) setTimeout(showExhausted, 650);
+}
+function showExhausted() {
+  S.paused = true;
+  showOverlay(`
+    <div class="panel">
+      <div style="font-size:56px">😵‍💫</div>
+      <h2>뭉게가 지쳤어요…</h2>
+      <p>괜찮아, 바람은 다시 불어오니까!<br>이 챕터를 처음부터 다시 도전해 보자.</p>
+      <button class="btn" id="retryBtn">다시 도전! 💪</button>
+    </div>`);
+  $('retryBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    S.hearts = CONFIG.hearts; renderHearts();
+    hideOverlay(); S.paused = false;
+    startChapter(S.chapter, true); // 대사 생략하고 플레이부터
+  });
+}
+
+/* ============================================================
+   오버레이
+   ============================================================ */
+function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; o.classList.add('on'); }
+function hideOverlay() { const o = $('overlay'); o.classList.remove('on'); o.innerHTML = ''; }
+
+/* ============================================================
+   뭉게 표정 SVG (대화창용 미니 아이콘)
+   ============================================================ */
+function faceSVG(face) {
+  const F = {
+    normal: { eye: 'dot', mouth: 'M-7 8 Q0 13 7 8', extra: '' },
+    happy:  { eye: 'arc', mouth: 'M-8 6 Q0 16 8 6', extra: '' },
+    cold:   { eye: 'dot', mouth: 'M-6 10 Q-3 8 0 10 Q3 12 6 10', tint: '#D6E6F7',
+              extra: '<text x="22" y="-12" font-size="13">❄</text>' },
+    surprised: { eye: 'big', mouth: 'M0 9 m-4 0 a4 4.6 0 1 0 8 0 a4 4.6 0 1 0 -8 0', extra: '<text x="20" y="-14" font-size="14">!</text>' },
+    hurt:   { eye: 'x', mouth: 'M-6 11 Q0 7 6 11', extra: '' },
+    hot:    { eye: 'dot', mouth: 'M-6 8 Q0 13 6 8', tint: '#FBDCCB',
+              extra: '<path d="M24 -6 q3 5 0 9" stroke="#7FB6E8" stroke-width="2.5" fill="none" stroke-linecap="round"/>' },
+    proud:  { eye: 'arc', mouth: 'M-8 6 Q0 15 8 6', extra: '<text x="-34" y="-14" font-size="13">✨</text>' },
+    cloud:  { eye: 'arc', mouth: 'M-8 6 Q0 15 8 6', white: true, extra: '' },
+  }[face] || {};
+  const body = F.tint || (F.white ? '#FFFFFF' : '#FFF7EA');
+  const eyes = F.eye === 'arc'
+    ? '<path d="M-14 -4 q4 -5 8 0 M6 -4 q4 -5 8 0" stroke="#5B4A44" stroke-width="2.6" fill="none" stroke-linecap="round"/>'
+    : F.eye === 'big'
+    ? '<circle cx="-10" cy="-4" r="3.6" fill="#5B4A44"/><circle cx="10" cy="-4" r="3.6" fill="#5B4A44"/>'
+    : F.eye === 'x'
+    ? '<path d="M-13 -7 l6 6 M-7 -7 l-6 6 M7 -7 l6 6 M13 -7 l-6 6" stroke="#5B4A44" stroke-width="2.4" stroke-linecap="round"/>'
+    : '<circle cx="-10" cy="-4" r="2.8" fill="#5B4A44"/><circle cx="10" cy="-4" r="2.8" fill="#5B4A44"/>';
+  return `<svg viewBox="-40 -40 80 80">
+    <path d="M-28 8 Q-32 -12 -14 -18 Q-8 -32 8 -28 Q26 -32 28 -12 Q34 4 22 14 Q12 26 -6 22 Q-24 24 -28 8 Z"
+      fill="${body}" stroke="#E3C6A8" stroke-width="3" stroke-linejoin="round"/>
+    ${eyes}
+    <circle cx="-19" cy="4" r="4.5" fill="#F9C6C0" opacity=".85"/>
+    <circle cx="19" cy="4" r="4.5" fill="#F9C6C0" opacity=".85"/>
+    <path d="${F.mouth}" stroke="#5B4A44" stroke-width="2.4" fill="${F.eye === 'big' ? '#5B4A44' : 'none'}" stroke-linecap="round"/>
+    ${F.extra || ''}
+  </svg>`;
+}
+
+/* ============================================================
+   대화 시스템 (타이핑 효과, 탭 → 전체 표시 → 다음)
+   ============================================================ */
+const Dialog = {
+  lines: [], idx: 0, charIdx: 0, typing: false, timer: null, onDone: null,
+  run(lines, onDone) {
+    this.lines = lines; this.idx = 0; this.onDone = onDone;
+    S.dialogActive = true;
+    M.held = false; activePointer = null;
+    $('dialogWrap').classList.add('on');
+    this.showLine();
+  },
+  showLine() {
+    const L = this.lines[this.idx];
+    $('dFace').innerHTML = faceSVG(L.face || 'normal');
+    if (L.face) M.setFace(L.face, 9999);
+    const el = $('dText');
+    el.innerHTML = '';
+    this.typing = true; this.charIdx = 0;
+    $('dNext').style.visibility = 'hidden';
+    // HTML 태그(<b> 등)를 지원하기 위해 전체를 넣고 글자 수로 잘라 보여줌
+    const plain = L.text;
+    clearInterval(this.timer);
+    this.timer = setInterval(() => {
+      this.charIdx++;
+      const done = this.charIdx >= this.stripLen(plain);
+      el.innerHTML = this.slice(plain, this.charIdx);
+      if (this.charIdx % 2 === 0) AudioSys.sTick();
+      if (done) this.finishLine();
+    }, 34);
+  },
+  stripLen(html) { return html.replace(/<[^>]*>/g, '').length; },
+  slice(html, n) { // 태그를 보존하며 앞 n글자만
+    let out = '', cnt = 0, i = 0;
+    while (i < html.length && cnt < n) {
+      if (html[i] === '<') { const j = html.indexOf('>', i); out += html.slice(i, j + 1); i = j + 1; }
+      else { out += html[i]; i++; cnt++; }
+    }
+    // 열린 태그 닫기 (b, span 만 사용)
+    const opens = (out.match(/<b>/g) || []).length - (out.match(/<\/b>/g) || []).length;
+    for (let k = 0; k < opens; k++) out += '</b>';
+    const so = (out.match(/<span[^>]*>/g) || []).length - (out.match(/<\/span>/g) || []).length;
+    for (let k = 0; k < so; k++) out += '</span>';
+    return out;
+  },
+  finishLine() {
+    clearInterval(this.timer);
+    this.typing = false;
+    $('dText').innerHTML = this.lines[this.idx].text;
+    $('dNext').style.visibility = 'visible';
+  },
+  tap() {
+    if (this.typing) { this.finishLine(); return; }
+    this.idx++;
+    if (this.idx < this.lines.length) { AudioSys.sPop(); this.showLine(); }
+    else this.close();
+  },
+  close() {
+    clearInterval(this.timer);
+    $('dialogWrap').classList.remove('on');
+    S.dialogActive = false;
+    M.faceTimer = 0; // 대화용 표정 해제
+    const cb = this.onDone; this.onDone = null;
+    if (cb) cb();
+  },
+  abort() { // 콜백 없이 강제 종료 (챕터 전환 시 안전장치)
+    clearInterval(this.timer);
+    $('dialogWrap').classList.remove('on');
+    S.dialogActive = false;
+    this.onDone = null;
+  },
+};
+$('dialogWrap').addEventListener('pointerdown', e => { e.stopPropagation(); Dialog.tap(); });
+
+/* ============================================================
+   뭉게 캐릭터 (캔버스)
+   ============================================================ */
+const M = {
+  x: 0, y: 0, tx: 0, ty: 0, r: 44,
+  held: false, grabDX: 0, grabDY: 0,
+  vxKm: 0, vyKm: 0,          // km/s (물리 판정용)
+  face: 'normal', faceTimer: 0, baseFace: 'normal',
+  coat: false,               // 구름 옷 (2장 이후)
+  visible: true, blink: 0,
+  place(x, y) { this.x = this.tx = x; this.y = this.ty = y; this.vxKm = 0; this.vyKm = 0; },
+  setFace(f, dur = 1.2) { this.face = f; this.faceTimer = dur; },
+  update(dt, pxPerKmX, pxPerKmY) {
+    const px = this.x, py = this.y;
+    const k = Math.min(1, dt * CONFIG.dragFollow);
+    this.x += (this.tx - this.x) * k;
+    this.y += (this.ty - this.y) * k;
+    if (dt > 0) {
+      this.vxKm = pxPerKmX ? (this.x - px) / pxPerKmX / dt : 0;
+      this.vyKm = pxPerKmY ? -(this.y - py) / pxPerKmY / dt : 0; // 위가 +
+    }
+    if (this.faceTimer > 0) { this.faceTimer -= dt; if (this.faceTimer <= 0) this.face = this.baseFace; }
+    this.blink -= dt;
+    if (this.blink < -3.2 + Math.sin(this.x * 0.13) * 0.8) this.blink = 0.13;
+  },
+  draw(c, t) {
+    if (!this.visible) return;
+    const { x, y, r } = this;
+    const shiver = this.face === 'cold' ? Math.sin(t * 34) * 2.2 : 0;
+    c.save();
+    c.translate(x + shiver, y + Math.sin(t * 1.7) * 3);
+
+    // 구름 옷: 몸 아래·옆의 하얀 뭉게 방울들
+    if (this.coat) {
+      c.fillStyle = '#FFFFFF'; c.strokeStyle = '#DCE8F4'; c.lineWidth = 3;
+      [[-r * 0.85, r * 0.35, r * 0.52], [r * 0.85, r * 0.35, r * 0.52], [0, r * 0.62, r * 0.6],
+       [-r * 0.45, r * 0.58, r * 0.45], [r * 0.45, r * 0.58, r * 0.45]].forEach(([dx, dy, rr], i) => {
+        blobPath(c, dx, dy, rr, i + 7, t, 0.12, 8); c.fill(); c.stroke();
+      });
+    }
+    // 몸통
+    const bodyFill = this.face === 'cold' ? '#E4EEF9' : this.face === 'hot' ? '#FBE0CE' : (this.coat ? '#FFFFFF' : '#FFF7EA');
+    c.fillStyle = bodyFill; c.strokeStyle = this.coat ? '#D8E4F0' : '#EDD3B4'; c.lineWidth = 4;
+    blobPath(c, 0, 0, r, 3, t, 0.09, 9);
+    c.fill(); c.stroke();
+
+    // 눈
+    c.fillStyle = '#5B4A44'; c.strokeStyle = '#5B4A44'; c.lineWidth = 3; c.lineCap = 'round';
+    const ex = r * 0.34, ey = -r * 0.12;
+    const happyEye = this.face === 'happy' || this.face === 'proud';
+    if (this.blink > 0 || happyEye) {
+      c.beginPath(); c.moveTo(-ex - 6, ey + 1); c.quadraticCurveTo(-ex, ey - (happyEye ? 7 : 1), -ex + 6, ey + 1); c.stroke();
+      c.beginPath(); c.moveTo(ex - 6, ey + 1); c.quadraticCurveTo(ex, ey - (happyEye ? 7 : 1), ex + 6, ey + 1); c.stroke();
+    } else if (this.face === 'hurt') {
+      c.beginPath();
+      c.moveTo(-ex - 5, ey - 5); c.lineTo(-ex + 5, ey + 5); c.moveTo(-ex + 5, ey - 5); c.lineTo(-ex - 5, ey + 5);
+      c.moveTo(ex - 5, ey - 5); c.lineTo(ex + 5, ey + 5); c.moveTo(ex + 5, ey - 5); c.lineTo(ex - 5, ey + 5);
+      c.stroke();
+    } else {
+      const big = this.face === 'surprised' ? 4.6 : 3.4;
+      c.beginPath(); c.arc(-ex, ey, big, 0, TAU); c.arc(ex, ey, big, 0, TAU); c.fill();
+    }
+    // 볼터치
+    c.fillStyle = this.face === 'hot' ? 'rgba(244,140,110,.75)' : 'rgba(249,198,192,.85)';
+    c.beginPath(); c.arc(-r * 0.62, r * 0.13, r * 0.14, 0, TAU); c.arc(r * 0.62, r * 0.13, r * 0.14, 0, TAU); c.fill();
+    // 입
+    c.strokeStyle = '#5B4A44'; c.lineWidth = 3; c.beginPath();
+    const my = r * 0.3;
+    if (this.face === 'happy' || this.face === 'proud') { c.moveTo(-9, my - 4); c.quadraticCurveTo(0, my + 8, 9, my - 4); }
+    else if (this.face === 'surprised') { c.arc(0, my, 5, 0, TAU); }
+    else if (this.face === 'hurt') { c.moveTo(-8, my + 3); c.quadraticCurveTo(0, my - 4, 8, my + 3); }
+    else if (this.face === 'cold') { c.moveTo(-7, my); c.quadraticCurveTo(-3.5, my - 3, 0, my); c.quadraticCurveTo(3.5, my + 3, 7, my); }
+    else { c.moveTo(-7, my - 2); c.quadraticCurveTo(0, my + 4, 7, my - 2); }
+    c.stroke();
+    // 부가 효과
+    if (this.face === 'cold') {
+      c.fillStyle = '#9CC4E8'; c.font = '16px Jua';
+      c.fillText('❄', r * 0.9, -r * 0.7); c.fillText('❄', -r * 1.15, -r * 0.4);
+    }
+    if (this.face === 'hot') {
+      c.strokeStyle = '#7FB6E8'; c.lineWidth = 3.2; c.beginPath();
+      c.moveTo(r * 0.82, -r * 0.62); c.quadraticCurveTo(r * 0.95, -r * 0.42, r * 0.8, -r * 0.28); c.stroke();
+    }
+    if (this.face === 'proud') {
+      c.fillStyle = '#F5C86E'; c.font = '15px Jua';
+      c.fillText('✨', -r * 1.25, -r * 0.65); c.fillText('✨', r * 0.85, -r * 0.85);
+    }
+    c.restore();
+  },
+};
+
+/* ============================================================
+   파티클
+   ============================================================ */
+const particles = [];
+function spawnParticles(x, y, n, colors, spd = 130, life = 0.8, grav = 60) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, v = spd * (0.4 + Math.random() * 0.8);
+    particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, life: life * (0.6 + Math.random() * 0.6), max: life,
+      c: colors[i % colors.length], r: 3 + Math.random() * 4, grav });
+  }
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt; if (p.life <= 0) { particles.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.grav * dt;
+  }
+}
+function drawParticles(c) {
+  particles.forEach(p => {
+    c.globalAlpha = Math.max(0, p.life / p.max);
+    c.fillStyle = p.c; c.beginPath(); c.arc(p.x, p.y, p.r, 0, TAU); c.fill();
+  });
+  c.globalAlpha = 1;
+}
+
+/* ============================================================
+   입력 (pointer events — 터치/마우스 공용)
+   ============================================================ */
+let activePointer = null;
+cv.addEventListener('pointerdown', e => {
+  AudioSys.ensure();
+  if (S.paused || S.dialogActive) return;
+  activePointer = e.pointerId;
+  cv.setPointerCapture(e.pointerId);
+  if (scene && scene.pd) scene.pd(e.clientX, e.clientY);
+});
+cv.addEventListener('pointermove', e => {
+  if (e.pointerId !== activePointer) return;
+  if (S.paused || S.dialogActive) return;
+  if (scene && scene.pm) scene.pm(e.clientX, e.clientY);
+});
+function endPointer(e) {
+  if (e.pointerId !== activePointer) return;
+  activePointer = null;
+  if (scene && scene.pu) scene.pu(e.clientX, e.clientY);
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// 뭉게 드래그 공통 로직
+function tryGrab(x, y) {
+  const d = Math.hypot(x - M.x, y - M.y);
+  if (d < CONFIG.grabRadius) {
+    M.held = true; M.grabDX = M.x - x; M.grabDY = M.y - y;
+    return true;
+  }
+  return false;
+}
+function dragTo(x, y, minX, maxX, minY, maxY) {
+  if (!M.held) return;
+  M.tx = clamp(x + M.grabDX, minX, maxX);
+  M.ty = clamp(y + M.grabDY, minY, maxY);
+}
+
+/* ============================================================
+   배경 그리기 도우미
+   ============================================================ */
+function skyGrad(c, top, bottom) {
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, top); g.addColorStop(1, bottom);
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+}
+function drawSun(c, x, y, r, t) {
+  c.fillStyle = 'rgba(255,224,166,.9)';
+  blobPath(c, x, y, r, 21, t, 0.05, 10); c.fill();
+  c.fillStyle = 'rgba(255,238,200,.5)';
+  blobPath(c, x, y, r * 1.5, 22, t, 0.06, 10); c.fill();
+}
+function drawCloudBlob(c, x, y, s, seed, t, alpha = 0.9) {
+  c.save(); c.globalAlpha = alpha;
+  c.fillStyle = '#FFFFFF'; c.strokeStyle = 'rgba(214,228,240,.8)'; c.lineWidth = 3;
+  [[0, 0, 1], [-0.9, 0.15, 0.7], [0.9, 0.15, 0.72], [-0.4, -0.35, 0.65], [0.45, -0.32, 0.6]].forEach(([dx, dy, rr], i) => {
+    blobPath(c, x + dx * s, y + dy * s, s * rr, seed + i * 3, t, 0.1, 8); c.fill();
+  });
+  c.restore();
+}
+// 고도 눈금 (왼쪽)
+function drawAltRuler(c, kmToY, maxKm, marks) {
+  c.strokeStyle = 'rgba(160,130,105,.35)'; c.fillStyle = 'rgba(140,110,88,.75)';
+  c.lineWidth = 2; c.font = '15px Jua'; c.textAlign = 'left';
+  for (let h = 0; h <= maxKm + 0.001; h += 0.5) {
+    const y = kmToY(h);
+    c.beginPath(); c.moveTo(10, y); c.lineTo(h % 1 === 0 ? 46 : 30, y); c.stroke();
+    if (h % 1 === 0) c.fillText(h.toFixed(1) + ' km', 52, y + 5);
+  }
+  (marks || []).forEach(mk => {
+    const y = kmToY(mk.h);
+    c.save(); c.strokeStyle = mk.color || 'rgba(120,150,220,.5)'; c.setLineDash([8, 8]); c.lineWidth = 2.5;
+    c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); c.restore();
+    if (mk.label) { c.fillStyle = mk.color || 'rgba(120,150,220,.9)'; c.font = '16px Jua'; c.fillText(mk.label, 100, y - 8); }
+  });
+}
+
+/* ============================================================
+   씬 관리 / 챕터 진행
+   ============================================================ */
+let scene = null;
+function setScene(s) {
+  if (scene && scene.exit) scene.exit();
+  scene = s;
+  if (s.resize) s.resize();
+  if (s.enter) s.enter();
+}
+
+function startChapter(i, skipIntro = false) {
+  S.chapter = clamp(i, 0, 7);
+  S.started = true;
+  Dialog.abort();
+  renderProgress(); renderHearts();
+  hideOverlay(); S.paused = false;
+  $('simPanel').classList.remove('on');
+  CHAPTERS[S.chapter].start(skipIntro);
+}
+
+function chapterCleared(labelForMap, clearLines, nextFn) {
+  AudioSys.sClear();
+  if (labelForMap) S.mapLabels[S.chapter] = labelForMap;
+  const proceed = () => showJourneyMap(nextFn);
+  if (clearLines && clearLines.length) setTimeout(() => Dialog.run(clearLines, proceed), 500);
+  else setTimeout(proceed, 500);
+}
+
+/* ============================================================
+   여정 지도 (막간 — 교사 설명 타이밍, 버튼 누를 때까지 정지)
+   ============================================================ */
+const MAP_STOPS = [ // 지도 위 뭉게 위치 (chapter index → x,y)
+  { x: 90,  y: 208 }, { x: 175, y: 148 }, { x: 258, y: 108 },
+  { x: 360, y: 66 },  { x: 415, y: 56 },  { x: 520, y: 130 },
+  { x: 640, y: 196 }, { x: 700, y: 196 },
+];
+const MAP_LABEL_POS = [
+  { x: 60,  y: 245 }, { x: 128, y: 118 }, { x: 208, y: 78 },
+  { x: 330, y: 36 },  { x: 428, y: 20 },  { x: 560, y: 100 },
+  { x: 615, y: 245 },
+];
+function journeyMapSVG(curCh) {
+  const labels = S.mapLabels.map((txt, i) => {
+    if (!txt || !MAP_LABEL_POS[i]) return '';
+    const p = MAP_LABEL_POS[i];
+    return `<g><rect x="${p.x - 6}" y="${p.y - 15}" rx="8" width="${txt.length * 12.5 + 16}" height="22"
+      fill="#FFF6E8" stroke="#E8CBA8" stroke-width="1.5"/>
+      <text class="mapLabel" x="${p.x + 2}" y="${p.y + 1}">${txt}</text></g>`;
+  }).join('');
+  const mg = MAP_STOPS[clamp(curCh, 0, 7)];
+  return `<svg id="mapSvg" viewBox="0 0 780 300">
+    <rect width="780" height="300" rx="20" fill="#F3FAFF"/>
+    <!-- 바다 -->
+    <path d="M0 240 Q60 232 120 240 Q160 246 200 242 L200 300 L0 300 Z" fill="#BFE3F2"/>
+    <path d="M14 252 q14 -7 28 0 M52 262 q14 -7 28 0 M100 254 q14 -7 28 0" stroke="#8FC7E4" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- 태백산맥 -->
+    <path d="M170 244 Q260 150 330 90 Q388 42 415 60 Q470 90 520 150 Q560 196 600 218 L600 246 L170 246 Z"
+      fill="#CBE7D2" stroke="#A5D2B4" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M382 74 Q400 52 418 66 Q407 58 396 64 Z" fill="#FFFFFF" stroke="#C8DDE8" stroke-width="2"/>
+    <!-- 영서 평야 -->
+    <path d="M580 226 Q660 214 780 224 L780 300 L580 300 Z" fill="#F6E7C8"/>
+    <path d="M620 250 q10 -14 20 0 M672 256 q10 -14 20 0 M718 246 q10 -14 20 0" stroke="#E3C68F" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- 경로 점선 -->
+    <path d="M90 216 Q140 190 175 158 Q225 118 258 112 Q320 78 360 70 Q395 58 415 62 Q470 92 520 138 Q575 188 640 204"
+      fill="none" stroke="#F0A97E" stroke-width="4" stroke-dasharray="2 11" stroke-linecap="round"/>
+    <text class="mapLabel" x="30" y="290">동해 바다</text>
+    <text class="mapLabel" x="360" y="290">태백산맥 (2.0 km)</text>
+    <text class="mapLabelBig" x="650" y="290">영서 지방</text>
+    ${labels}
+    <!-- 뭉게 아이콘 -->
+    <g transform="translate(${mg.x},${mg.y})">
+      <ellipse cx="0" cy="3" rx="24" ry="17" fill="${curCh >= 2 && curCh <= 4 ? '#FFFFFF' : '#FFF4E2'}" stroke="#E8C9A0" stroke-width="3"/>
+      <circle cx="-7" cy="-1" r="2.3" fill="#5B4A44"/><circle cx="7" cy="-1" r="2.3" fill="#5B4A44"/>
+      <path d="M-5 6 Q0 10 5 6" stroke="#5B4A44" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <circle cx="-13" cy="4" r="3" fill="#F9C6C0"/><circle cx="13" cy="4" r="3" fill="#F9C6C0"/>
+    </g>
+  </svg>`;
+}
+function showJourneyMap(nextFn) {
+  S.paused = true;
+  showOverlay(`
+    <div class="panel">
+      <h2>🗺 뭉게의 여정 지도</h2>
+      ${journeyMapSVG(S.chapter)}
+      <p style="margin-top:6px">지나온 길에 뭉게의 기록이 남았어요.</p>
+      <button class="btn" id="mapNextBtn">다음 여정으로 ➜</button>
+    </div>`);
+  $('mapNextBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation(); AudioSys.sPop();
+    hideOverlay(); S.paused = false;
+    nextFn();
+  });
+}
+
+/* ============================================================
+   타이틀 화면
+   ============================================================ */
+function showTitle() {
+  S.screen = 'title';
+  AudioSys.stopBgm();
+  setScene(TitleScene);
+  const contBtn = S.started ? `<button class="btn mint" id="contBtn">이어하기 ▶ (${CH_NAMES[S.chapter]})</button>` : '';
+  showOverlay(`
+    <div class="panel" style="background:rgba(255,251,243,.86)">
+      <p class="titleSub">지구시스템과학 · 대기 안정도와 강수</p>
+      <h1>뭉게의 하늘 여행</h1>
+      <div id="titleArt">${faceSVG('happy')}</div>
+      <p>동해 바다에서 태어난 공기 요정 뭉게와 함께<br>태백산맥을 넘어 영서 지방까지! <b>손가락으로 뭉게를 끌어서</b> 여행해요.</p>
+      <div>
+        <button class="btn" id="startBtn">처음부터 시작 🌊</button>
+        ${contBtn}
+      </div>
+      <p style="font-size:13px;margin-top:10px;color:#B49A85">※ 새로고침하면 처음으로 돌아가요 · 소리는 우측 위 버튼으로 끌 수 있어요</p>
+    </div>`);
+  $('startBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation(); AudioSys.ensure(); AudioSys.sClear();
+    S.hearts = CONFIG.hearts; S.mapLabels = [];
+    startChapter(0);
+  });
+  if (S.started) $('contBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation(); AudioSys.ensure(); AudioSys.sPop();
+    startChapter(S.chapter);
+  });
+}
+
+const TitleScene = {
+  enter() { M.visible = true; M.coat = false; M.baseFace = 'happy'; M.place(W * 0.5, H * 0.62); },
+  update(dt) { M.tx = W * 0.5 + Math.sin(S.time * 0.6) * 30; M.ty = H * 0.62; M.update(dt, 0, 0); },
+  draw(c, t) {
+    skyGrad(c, '#CDE9F5', '#FFF3E0');
+    drawSun(c, W * 0.82, H * 0.2, 46, t);
+    drawCloudBlob(c, W * 0.2, H * 0.25, 34, 5, t, 0.8);
+    drawCloudBlob(c, W * 0.65, H * 0.4, 26, 11, t, 0.6);
+    // 바다
+    c.fillStyle = '#B5DEEF';
+    c.beginPath(); c.moveTo(0, H * 0.8);
+    for (let x = 0; x <= W; x += 40) c.quadraticCurveTo(x + 20, H * 0.8 + Math.sin(t * 1.5 + x * 0.03) * 8, x + 40, H * 0.8);
+    c.lineTo(W, H); c.lineTo(0, H); c.fill();
+    setMeters(0, SCENARIO.T0, SCENARIO.Td0);
+  },
+};
+</script>
+<script>
+'use strict';
+/* ============================================================
+   수직 이동 씬 도우미 (1·2·7장)
+   ============================================================ */
+function vertMap(maxKm) {
+  const topPad = 96, groundY = H * 0.88;
+  const pxPerKm = (groundY - topPad) / maxKm;
+  return { kmToY: h => groundY - h * pxPerKm, yToKm: y => (groundY - y) / pxPerKm, pxPerKm, groundY };
+}
+
+/* ============================================================
+   0장 — 프롤로그: 바다에서 태어난 뭉게
+   ============================================================ */
+const Ch0Scene = {
+  sparks: [], playing: false,
+  enter() {
+    M.visible = true; M.coat = false; M.baseFace = 'happy'; M.face = 'happy';
+    M.place(W * 0.3, H * 0.55);
+    this.playing = false;
+    this.sparks = [
+      { fx: 0.55, fy: 0.3, got: false }, { fx: 0.78, fy: 0.55, got: false }, { fx: 0.6, fy: 0.75, got: false },
+    ];
+    setMeters(0, SCENARIO.T0, SCENARIO.Td0);
+  },
+  resize() {},
+  update(dt) {
+    M.update(dt, 0, 0);
+    setMeters(0, SCENARIO.T0, SCENARIO.Td0);
+    if (!this.playing) return;
+    this.sparks.forEach(sp => {
+      if (sp.got) return;
+      const sx = sp.fx * W, sy = sp.fy * H;
+      if (Math.hypot(sx - M.x, sy - M.y) < M.r + 26) {
+        sp.got = true; AudioSys.sSparkle(); M.setFace('happy', 1);
+        spawnParticles(sx, sy, 14, ['#FFE9A8', '#FFD3E0', '#C9E8FF'], 150, 0.9, 40);
+        const left = this.sparks.filter(s => !s.got).length;
+        if (left > 0) toast(`반짝이 ${3 - left} / 3 ✨`, true, 900);
+        else { this.playing = false; this.clear(); }
+      }
+    });
+  },
+  clear() {
+    chapterCleared('출발: 20℃ · 이슬점 12℃',
+      [{ face: 'proud', text: '좋아, 몸풀기 완료! 이제 진짜 여행 시작이야. <b>태백산맥</b>, 기다려!' }],
+      () => startChapter(1));
+  },
+  pd(x, y) { tryGrab(x, y); },
+  pm(x, y) { dragTo(x, y, 40, W - 40, 60, H - 40); },
+  pu() { M.held = false; },
+  draw(c, t) {
+    skyGrad(c, '#FFE4CB', '#CDE9F5');
+    drawSun(c, W * 0.15, H * 0.22, 42, t);
+    drawCloudBlob(c, W * 0.7, H * 0.18, 28, 4, t, 0.75);
+    // 바다
+    c.fillStyle = '#AEDCEF';
+    c.beginPath(); c.moveTo(0, H * 0.82);
+    for (let x = 0; x <= W + 40; x += 40) c.quadraticCurveTo(x + 20, H * 0.82 + Math.sin(t * 1.6 + x * 0.04) * 9, x + 40, H * 0.82);
+    c.lineTo(W, H); c.lineTo(0, H); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 3;
+    for (let i = 0; i < 4; i++) {
+      const wy = H * (0.86 + i * 0.035);
+      c.beginPath();
+      for (let x = -40; x <= W; x += 34) {
+        const yy = wy + Math.sin(t * 2 + x * 0.05 + i * 2) * 4;
+        x < 0 ? c.moveTo(x, yy) : c.lineTo(x, yy);
+      }
+      c.stroke();
+    }
+    // 수증기 김
+    c.fillStyle = 'rgba(255,255,255,.35)';
+    for (let i = 0; i < 6; i++) {
+      const px = (i * 0.17 + 0.06) * W, py = H * 0.8 - ((t * 22 + i * 47) % 90);
+      c.beginPath(); c.arc(px, py, 6 + (i % 3) * 3, 0, TAU); c.fill();
+    }
+    // 반짝이
+    if (this.playing) this.sparks.forEach((sp, i) => {
+      if (sp.got) return;
+      const sx = sp.fx * W, sy = sp.fy * H, s = 15 + Math.sin(t * 4 + i * 2) * 3;
+      c.save(); c.translate(sx, sy); c.rotate(t * 1.2 + i);
+      c.fillStyle = '#FFDD88'; c.strokeStyle = '#F5B93E'; c.lineWidth = 2.5;
+      c.beginPath();
+      for (let k = 0; k < 8; k++) {
+        const rr = k % 2 === 0 ? s : s * 0.45, a = (k / 8) * TAU;
+        k === 0 ? c.moveTo(Math.cos(a) * rr, Math.sin(a) * rr) : c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      c.closePath(); c.fill(); c.stroke(); c.restore();
+    });
+    M.draw(c, t);
+  },
+};
+const ch0 = {
+  start(skip) {
+    AudioSys.startBgm('sea');
+    setScene(Ch0Scene);
+    const begin = () => { Ch0Scene.playing = true; toast('뭉게를 끌어서 반짝이 3개를 모아 봐! ✨', true, 2600); };
+    if (skip) { begin(); return; }
+    Dialog.run([
+      { face: 'happy', text: '안녕! 나는 동해 바다에서 태어난 공기 요정, <b>뭉게</b>야!' },
+      { face: 'normal', text: '따뜻한 바다 위에서 수증기를 듬뿍 마셨더니 몸이 아주 촉촉해~' },
+      { face: 'normal', text: '오른쪽 위 계기판 보이지? 지금 내 <b>기온은 20℃</b>, <span class="kw">이슬점은 12℃</span>야.' },
+      { face: 'surprised', text: '오늘은 바람을 타고 저 멀리 <b>태백산맥을 넘어 영서 지방</b>까지 가 볼 거야!' },
+      { face: 'happy', text: '먼저 움직이는 연습! <b>손가락으로 나를 끌어서</b> 반짝이를 모아 줘!' },
+    ], begin);
+  },
+};
+
+/* ============================================================
+   1장 — 첫 비행 (목표 고도 1.0 km에서 3초 버티기)
+   ============================================================ */
+const Ch1Scene = {
+  map: null, playing: false, holdT: 0, overFlag: false,
+  enter() {
+    this.map = vertMap(1.9);
+    M.visible = true; M.coat = false; M.baseFace = 'normal';
+    M.place(W * 0.42, this.map.kmToY(0.08));
+    this.playing = false; this.holdT = 0; this.overFlag = false;
+  },
+  resize() { this.map = vertMap(1.9); },
+  alt() { return clamp(this.map.yToKm(M.y), 0, 2.4); },
+  update(dt) {
+    M.update(dt, 0, this.map.pxPerKm);
+    const h = this.alt();
+    const st = riseState(SCENARIO.T0, SCENARIO.Td0, h);
+    setMeters(h, st.T, st.Td);
+    M.baseFace = h > 0.6 ? 'cold' : 'normal';
+    if (!this.playing) return;
+    const c1 = CONFIG.ch1;
+    const inZone = Math.abs(h - c1.zoneCenter) <= c1.zoneHalf;
+    if (inZone) {
+      this.holdT += dt;
+      if (this.holdT >= c1.holdSec) { this.playing = false; M.held = false; this.clear(); }
+    } else this.holdT = 0;
+    // 오버슈트
+    if (h > c1.zoneCenter + c1.zoneHalf + c1.overshootKm && !this.overFlag) {
+      this.overFlag = true;
+      loseHeart('너무 높이 지나쳤어! 목표는 1.0 km!');
+      M.held = false; M.ty = this.map.kmToY(0.9);
+    }
+    if (h < c1.zoneCenter + 0.2) this.overFlag = false;
+    // 급강하
+    if (M.vyS < -c1.maxFallKmPerSec && h > 0.15) {
+      loseHeart('너무 빨리 떨어졌어! 어지러워~');
+      M.vyS = 0;
+    }
+  },
+  clear() {
+    spawnParticles(M.x, M.y, 22, ['#BDE8FF', '#FFF1B8', '#FFD9E8'], 160, 1);
+    chapterCleared('1 km 상승 · 기온 −10℃/km',
+      [
+        { face: 'cold', text: '해냈어! 1.0 km까지 올라오니 기온이 <b>20℃ → 10℃</b>. 1 km에 10℃씩이나 떨어졌어!' },
+        { face: 'surprised', text: '주위 공기가 희박해서 몸이 <b>부풀면서(팽창)</b> 열을 썼거든. 이게 <span class="kw">단열 팽창 냉각</span>!' },
+        { face: 'normal', text: '<span class="kw">이슬점</span>은 12℃에서 10℃로, 1 km에 <b>2℃</b>만 내려갔어. 어라? 기온이랑 똑같아졌네…?' },
+      ],
+      () => startChapter(2));
+  },
+  pd(x, y) { tryGrab(x, y); },
+  pm(x, y) { dragTo(x, y, 60, W - 60, 60, this.map.groundY - 10); },
+  pu() { M.held = false; },
+  draw(c, t) {
+    skyGrad(c, '#BFE0F5', '#EAF6F0');
+    drawSun(c, W * 0.85, H * 0.16, 38, t);
+    drawCloudBlob(c, W * 0.78, H * 0.5, 24, 8, t, 0.5);
+    // 해안선(아래)
+    c.fillStyle = '#AEDCEF'; c.fillRect(0, this.map.groundY, W, H - this.map.groundY);
+    c.fillStyle = '#F2E3C4';
+    c.beginPath(); c.moveTo(W * 0.5, this.map.groundY); c.quadraticCurveTo(W * 0.75, this.map.groundY - 16, W, this.map.groundY - 8);
+    c.lineTo(W, H); c.lineTo(W * 0.5, H); c.fill();
+    drawAltRuler(c, this.map.kmToY, 1.5, []);
+    // 목표 존
+    const c1 = CONFIG.ch1;
+    const zTop = this.map.kmToY(c1.zoneCenter + c1.zoneHalf), zBot = this.map.kmToY(c1.zoneCenter - c1.zoneHalf);
+    const pulse = 0.16 + Math.sin(t * 3) * 0.05;
+    c.fillStyle = `rgba(150,210,180,${pulse})`;
+    c.fillRect(0, zTop, W, zBot - zTop);
+    c.strokeStyle = 'rgba(110,190,150,.7)'; c.lineWidth = 3; c.setLineDash([14, 10]);
+    c.beginPath(); c.moveTo(0, zTop); c.lineTo(W, zTop); c.moveTo(0, zBot); c.lineTo(W, zBot); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#4E9A6E'; c.font = '19px Jua'; c.textAlign = 'right';
+    c.fillText('목표 존 1.0 km', W - 24, zTop - 10); c.textAlign = 'left';
+    // 버티기 진행 링
+    if (this.playing && this.holdT > 0) {
+      c.strokeStyle = '#5FBF8A'; c.lineWidth = 7; c.lineCap = 'round';
+      c.beginPath(); c.arc(M.x, M.y, M.r + 20, -Math.PI / 2, -Math.PI / 2 + TAU * (this.holdT / CONFIG.ch1.holdSec)); c.stroke();
+      c.fillStyle = '#4E9A6E'; c.font = '21px Jua'; c.textAlign = 'center';
+      c.fillText(`${Math.max(0, CONFIG.ch1.holdSec - this.holdT).toFixed(1)}초`, M.x, M.y - M.r - 32); c.textAlign = 'left';
+    }
+    M.draw(c, t);
+  },
+};
+const ch1 = {
+  start(skip) {
+    AudioSys.startBgm('rise');
+    setScene(Ch1Scene);
+    const begin = () => { Ch1Scene.playing = true; toast('빛나는 존에 들어가 3초 버티기!', true, 2400); };
+    if (skip) { begin(); return; }
+    Dialog.run([
+      { face: 'happy', text: '바람이 나를 산 쪽으로 밀어 주고 있어. 자, 하늘로 올라가 볼까!' },
+      { face: 'surprised', text: '으앗! 올라갈수록 주위 공기가 옅어져서 <b>몸이 부풀어</b>!' },
+      { face: 'cold', text: '부풀면서 열을 쓰니까 <b>1 km 오를 때마다 10℃</b>씩 추워진대… 덜덜.' },
+      { face: 'normal', text: '<span class="kw">이슬점은 1 km에 2℃</span>씩만 내려가. 계기판의 두 숫자를 잘 봐 둬!' },
+      { face: 'happy', text: '목표는 <b>1.0 km</b>! 나를 살살 끌어올려서 초록 존에서 <b>3초</b>만 버텨 줘. 너무 지나치거나 뚝 떨어지면 어지러워~' },
+    ], begin);
+  },
+};
+
+/* ============================================================
+   2장 — 구름 옷 (응결 고도 H = ⅛(T−Td) = 1.0 km)
+   ============================================================ */
+const Ch2Scene = {
+  map: null, playing: false, holdT: 0, escapes: 0, escFlag: false,
+  enter() {
+    this.map = vertMap(1.9);
+    M.visible = true; M.coat = false; M.baseFace = 'cold';
+    M.place(W * 0.45, this.map.kmToY(0.72));
+    this.playing = false; this.holdT = 0; this.escapes = 0; this.escFlag = false;
+  },
+  resize() { this.map = vertMap(1.9); },
+  alt() { return clamp(this.map.yToKm(M.y), 0, 2.4); },
+  update(dt) {
+    M.update(dt, 0, this.map.pxPerKm);
+    const h = this.alt();
+    const st = riseState(SCENARIO.T0, SCENARIO.Td0, h);
+    setMeters(h, st.T, st.Td);
+    if (!this.playing) return;
+    const c2 = CONFIG.ch2;
+    if (Math.abs(h - c2.zoneCenter) <= c2.zoneHalf) {
+      this.holdT += dt;
+      if (this.holdT >= c2.holdSec) { this.playing = false; M.held = false; this.condense(); }
+    } else this.holdT = 0;
+    if (h >= c2.escapeAlt && !this.escFlag) {
+      this.escFlag = true; this.escapes++;
+      if (this.escapes % c2.escapesPerHeart === 0) loseHeart('응결 고도를 한참 지나쳐 버렸어!');
+      else { AudioSys.sMiss(); toast('너무 높아! 응결 고도 1.0 km로 돌아가자'); }
+      M.held = false; M.ty = this.map.kmToY(1.15);
+    }
+    if (h < 1.25) this.escFlag = false;
+  },
+  condense() {
+    AudioSys.sCondense();
+    M.coat = true; M.baseFace = 'proud'; M.setFace('proud', 3);
+    spawnParticles(M.x, M.y, 34, ['#FFFFFF', '#DFF0FF', '#FFF6D8'], 190, 1.2, 20);
+    toast('✨ 응결! 구름 옷을 입었다!', true, 2200);
+    setTimeout(() => {
+      chapterCleared('구름 옷! H = ⅛(20−12) = 1.0 km',
+        [
+          { face: 'cloud', text: '우와아… 몸이 하얗고 몽실몽실해졌어! 나, <b>뭉게구름</b>이 됐어!' },
+          { face: 'proud', text: '<b>기온 = 이슬점</b>이 되는 높이에서 수증기가 물방울로 변하는 것, 이게 <span class="kw">응결</span>이야.' },
+          { face: 'normal', text: '그 높이는 <b>H = ⅛(T − Td)</b>. 오늘은 ⅛ × (20 − 12) = <b>1.0 km</b>! 계산이랑 딱 맞지?' },
+        ],
+        () => startChapter(3));
+    }, 1400);
+  },
+  pd(x, y) { tryGrab(x, y); },
+  pm(x, y) { dragTo(x, y, 60, W - 60, 60, this.map.groundY - 10); },
+  pu() { M.held = false; },
+  draw(c, t) {
+    skyGrad(c, '#B5D8F0', '#E8F2EC');
+    drawCloudBlob(c, W * 0.82, H * 0.28, 26, 9, t, 0.55);
+    c.fillStyle = '#CBE4D2'; c.fillRect(0, this.map.groundY, W, H - this.map.groundY);
+    drawAltRuler(c, this.map.kmToY, 1.5, []);
+    // 응결 존
+    const c2 = CONFIG.ch2;
+    const zTop = this.map.kmToY(c2.zoneCenter + c2.zoneHalf), zBot = this.map.kmToY(c2.zoneCenter - c2.zoneHalf);
+    const pulse = 0.18 + Math.sin(t * 3.4) * 0.06;
+    c.fillStyle = `rgba(160,190,240,${pulse})`; c.fillRect(0, zTop, W, zBot - zTop);
+    c.strokeStyle = 'rgba(120,150,220,.75)'; c.lineWidth = 3; c.setLineDash([14, 10]);
+    c.beginPath(); c.moveTo(0, zTop); c.lineTo(W, zTop); c.moveTo(0, zBot); c.lineTo(W, zBot); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#5D7FB8'; c.font = '19px Jua'; c.textAlign = 'right';
+    c.fillText('응결 고도 H = 1.0 km', W - 24, zTop - 10); c.textAlign = 'left';
+    // 기온·이슬점 접근 표시
+    const h = this.alt(), st = riseState(SCENARIO.T0, SCENARIO.Td0, h);
+    const gap = st.T - st.Td;
+    c.save();
+    c.font = '26px Jua'; c.textAlign = 'center';
+    const cx = W * 0.74, cy = H * 0.34;
+    c.fillStyle = 'rgba(255,251,243,.85)';
+    c.strokeStyle = '#E9CDB4'; c.lineWidth = 3;
+    c.beginPath(); c.roundRect(cx - 165, cy - 34, 330, 96, 20); c.fill(); c.stroke();
+    c.fillStyle = '#D97F62'; c.fillText(`기온 ${fmt1(st.T)}℃`, cx - 80, cy);
+    c.fillStyle = '#6E86B8'; c.fillText(`이슬점 ${fmt1(st.Td)}℃`, cx + 80, cy);
+    c.font = '20px Jua';
+    c.fillStyle = gap < 0.5 ? '#4E9A6E' : '#9A7E6E';
+    c.fillText(gap <= 0.01 ? '두 숫자가 만났다! = 응결!' : `차이 ${fmt1(gap)}℃ … 점점 가까워져!`, cx, cy + 42);
+    c.restore();
+    if (this.playing && this.holdT > 0) {
+      c.strokeStyle = '#7F9FD8'; c.lineWidth = 7; c.lineCap = 'round';
+      c.beginPath(); c.arc(M.x, M.y, M.r + 20, -Math.PI / 2, -Math.PI / 2 + TAU * (this.holdT / CONFIG.ch2.holdSec)); c.stroke();
+    }
+    M.draw(c, t);
+  },
+};
+const ch2 = {
+  start(skip) {
+    AudioSys.startBgm('rise');
+    setScene(Ch2Scene);
+    const begin = () => { Ch2Scene.playing = true; toast('파란 응결 존에서 2초 버티기!', true, 2400); };
+    if (skip) { begin(); return; }
+    Dialog.run([
+      { face: 'cold', text: '계기판을 봐! 기온이랑 이슬점이 <b>거의 만나기 직전</b>이야.' },
+      { face: 'normal', text: '두 숫자가 같아지는 높이는… <b>⅛ × (기온 − 이슬점)</b>! ⅛ × (20 − 12) = <b>1.0 km</b>!' },
+      { face: 'surprised', text: '거기서는 내 몸속 수증기가 물방울로 변한대. 두근두근… 이게 <span class="kw">응결</span>이구나!' },
+      { face: 'happy', text: '딱 <b>1.0 km</b>에 맞춰서 <b>2초</b>! 나에게 구름 옷을 입혀 줘!' },
+    ], begin);
+  },
+};
+
+/* ============================================================
+   3장 — 태백산맥의 벽 (옆스크롤, 가이드 밴드 등반)
+   ============================================================ */
+const Ch3Scene = {
+  playing: false, camX: 0, camY: 0, pxX: 0, pxY: 0, worldTopKm: 2.6,
+  offT: 0, badgeShown: false, worldWKm: 4.3,
+  bandCenter(x) { return 1.0 + 1.0 * smooth(clamp(x / 3.6, 0, 1)); },
+  terrain(x) {
+    const base = this.bandCenter(x) - 0.34;
+    const bump = 0.05 * Math.sin(x * 4.1) * (1 - smooth(clamp((x - 3.1) / 0.5, 0, 1)));
+    return Math.max(0.1, base + bump);
+  },
+  enter() {
+    this.pxX = W / 2.2; this.pxY = H / 1.55;
+    M.visible = true; M.coat = true; M.baseFace = 'cloud';
+    this.camX = 0; this.camY = (this.worldTopKm - 1.55) * this.pxY - H * 0.5;
+    this.clampCam();
+    const sp = this.w2s(0.25, this.bandCenter(0.25));
+    M.place(sp.x, sp.y);
+    this.playing = false; this.offT = 0; this.badgeShown = false;
+  },
+  resize() { this.pxX = W / 2.2; this.pxY = H / 1.55; this.clampCam(); },
+  w2s(xKm, hKm) { return { x: xKm * this.pxX - this.camX, y: (this.worldTopKm - hKm) * this.pxY - this.camY }; },
+  mWorld() { return { x: (M.x + this.camX) / this.pxX, h: this.worldTopKm - (M.y + this.camY) / this.pxY }; },
+  clampCam() {
+    this.camX = clamp(this.camX, 0, this.worldWKm * this.pxX - W);
+    this.camY = clamp(this.camY, 0, this.worldTopKm * this.pxY + 120 - H);
+  },
+  update(dt) {
+    M.update(dt, this.pxX, this.pxY);
+    const mw = this.mWorld();
+    const st = riseState(SCENARIO.T0, SCENARIO.Td0, clamp(mw.h, 0, 2.4));
+    setMeters(clamp(mw.h, 0, 2.4), st.T, st.Td);
+    // 카메라 따라가기
+    const dCamX = clamp(mw.x * this.pxX - W * 0.42, 0, Math.max(0, this.worldWKm * this.pxX - W)) - this.camX;
+    const dCamY = clamp((this.worldTopKm - mw.h) * this.pxY - H * 0.52, 0, this.worldTopKm * this.pxY + 120 - H) - this.camY;
+    const kx = Math.min(1, dt * 3.5);
+    this.camX += dCamX * kx; M.x -= dCamX * kx; M.tx -= dCamX * kx;
+    this.camY += dCamY * kx; M.y -= dCamY * kx; M.ty -= dCamY * kx;
+    if (!this.playing) return;
+    const c3 = CONFIG.ch3;
+    // 감률 변화 배지 (1.0 km 통과)
+    if (!this.badgeShown && mw.h > 1.08 && mw.x > 0.4) {
+      this.badgeShown = true; AudioSys.sBadge(); M.held = false;
+      toast('🏷 감률 변화! −10 → <b>−5 ℃/km</b>', true, 2800);
+      Dialog.run([{ face: 'cloud', text: '구름 옷을 입으니 덜 추워! 응결할 때 <span class="kw">숨은열</span>이 나와서, 이제 <b>1 km에 5℃</b>씩만 식는대!' }]);
+    }
+    // 산 표면 충돌
+    if (mw.h <= this.terrain(mw.x) + 0.05) {
+      loseHeart('산에 부딪혔어! 아야…');
+      const bc = this.bandCenter(mw.x);
+      M.held = false;
+      const p = this.w2s(mw.x, bc); M.place(p.x, p.y);
+      return;
+    }
+    // 가이드 밴드 이탈
+    const bc = this.bandCenter(mw.x);
+    if (Math.abs(mw.h - bc) > c3.bandHalfKm) {
+      this.offT += dt;
+      if (this.offT >= c3.offBandGraceSec) {
+        loseHeart('빛나는 바람길을 벗어났어!');
+        M.held = false;
+        const p = this.w2s(mw.x, bc); M.place(p.x, p.y);
+        this.offT = 0;
+      }
+    } else this.offT = 0;
+    // 정상 도달
+    if (mw.x > 3.7 && mw.h >= CONFIG.ch3.clearAltKm - 0.2) {
+      this.playing = false; M.held = false;
+      spawnParticles(M.x, M.y, 26, ['#FFFFFF', '#CDEBFF', '#FFEFC2'], 170, 1.1);
+      chapterCleared('정상 2.0 km · 기온 5℃ (−5℃/km)',
+        [
+          { face: 'proud', text: '태백산맥 <b>정상 2.0 km</b>! 지금 내 몸은 <b>5℃</b>야.' },
+          { face: 'normal', text: '구름 옷 전엔 1 km에 10℃, 입은 뒤엔 <b>1 km에 5℃</b>. 그래서 20 → 10 → <b>5℃</b>가 된 거야!' },
+        ],
+        () => startChapter(4));
+    }
+  },
+  pd(x, y) { tryGrab(x, y); },
+  pm(x, y) { dragTo(x, y, 40, W - 40, 40, H - 40); },
+  pu() { M.held = false; },
+  draw(c, t) {
+    skyGrad(c, '#AECBEE', '#E4EEF2');
+    // 뒤 능선
+    c.fillStyle = 'rgba(180,205,190,.5)';
+    c.beginPath(); c.moveTo(0, H);
+    for (let sx = 0; sx <= W; sx += 30) {
+      const xKm = (sx + this.camX * 0.4) / this.pxX;
+      c.lineTo(sx, this.w2s(0, this.terrain(xKm) * 0.75 + 0.5).y + this.camY * 0.5);
+    }
+    c.lineTo(W, H); c.fill();
+    // 가이드 밴드
+    const c3 = CONFIG.ch3;
+    c.beginPath();
+    for (let sx = -20; sx <= W + 20; sx += 24) {
+      const xKm = (sx + this.camX) / this.pxX;
+      const y = this.w2s(0, this.bandCenter(xKm) + c3.bandHalfKm).y;
+      sx === -20 ? c.moveTo(sx, y) : c.lineTo(sx, y);
+    }
+    for (let sx = W + 20; sx >= -20; sx -= 24) {
+      const xKm = (sx + this.camX) / this.pxX;
+      c.lineTo(sx, this.w2s(0, this.bandCenter(xKm) - c3.bandHalfKm).y);
+    }
+    c.closePath();
+    c.fillStyle = `rgba(255,235,170,${0.3 + Math.sin(t * 3) * 0.08})`;
+    c.fill();
+    // 산 본체
+    c.fillStyle = '#BFDCC8'; c.strokeStyle = '#9CC4A8'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(-20, H + 20);
+    for (let sx = -20; sx <= W + 20; sx += 20) {
+      const xKm = (sx + this.camX) / this.pxX;
+      c.lineTo(sx, this.w2s(0, this.terrain(xKm)).y);
+    }
+    c.lineTo(W + 20, H + 20); c.closePath(); c.fill(); c.stroke();
+    // 나무
+    c.fillStyle = '#8FBF9C';
+    for (let i = 0; i < 14; i++) {
+      const xKm = 0.15 + i * 0.31;
+      const p = this.w2s(xKm, this.terrain(xKm));
+      if (p.x < -30 || p.x > W + 30) continue;
+      c.beginPath(); c.moveTo(p.x, p.y - 26); c.lineTo(p.x - 11, p.y + 2); c.lineTo(p.x + 11, p.y + 2); c.closePath(); c.fill();
+    }
+    // 정상 깃발
+    const fp = this.w2s(3.85, this.bandCenter(3.85));
+    c.strokeStyle = '#A0765C'; c.lineWidth = 5;
+    c.beginPath(); c.moveTo(fp.x, fp.y + 10); c.lineTo(fp.x, fp.y - 52); c.stroke();
+    c.fillStyle = '#F58C8C';
+    c.beginPath(); c.moveTo(fp.x, fp.y - 52); c.lineTo(fp.x + 44 + Math.sin(t * 4) * 4, fp.y - 40); c.lineTo(fp.x, fp.y - 28); c.closePath(); c.fill();
+    c.fillStyle = '#7A6152'; c.font = '17px Jua'; c.textAlign = 'center';
+    c.fillText('정상 2.0 km', fp.x + 10, fp.y - 62); c.textAlign = 'left';
+    // 밴드 이탈 경고
+    const mw = this.mWorld();
+    if (this.playing && Math.abs(mw.h - this.bandCenter(mw.x)) > c3.bandHalfKm) {
+      c.fillStyle = `rgba(240,140,110,${0.12 + Math.sin(t * 10) * 0.06})`;
+      c.fillRect(0, 0, W, H);
+      c.fillStyle = '#C9603C'; c.font = '20px Jua'; c.textAlign = 'center';
+      c.fillText('⚠ 바람길로 돌아가!', W / 2, H * 0.16); c.textAlign = 'left';
+    }
+    M.draw(c, t);
+  },
+};
+const ch3 = {
+  start(skip) {
+    AudioSys.startBgm('mtn');
+    setScene(Ch3Scene);
+    const begin = () => { Ch3Scene.playing = true; toast('노란 바람길을 따라 정상까지!', true, 2400); };
+    if (skip) { begin(); return; }
+    Dialog.run([
+      { face: 'cloud', text: '구름 옷, 폭신폭신~ 그리고 신기하게 아까보다 <b>덜 추워</b>!' },
+      { face: 'surprised', text: '저기 봐, <b>태백산맥의 벽</b>이야! 벌써 저렇게 높다니…' },
+      { face: 'normal', text: '빛나는 <span class="kw">바람길(가이드 밴드)</span>을 따라 <b>정상 2.0 km</b>까지 데려다 줘!' },
+      { face: 'happy', text: '산에 부딪히거나 바람길을 벗어나면 큰일 나~ 조심조심!' },
+    ], begin);
+  },
+};
+
+/* ============================================================
+   4장 — 비를 뿌려라 (리듬 탭)
+   ============================================================ */
+const Ch4Scene = {
+  playing: false, notes: [], hits: 0, misses: 0, lanes: [0.5, 0.66, 0.82],
+  judgeY: 0, base: 0, beatSec: 0.571, lastTap: -9, endT: 0, rains: [],
+  enter() {
+    M.visible = true; M.coat = true; M.baseFace = 'cloud';
+    M.place(W * 0.22, H * 0.3);
+    this.judgeY = H * 0.76;
+    this.playing = false; this.rains = [];
+    setMeters(SCENARIO.TOP, 5, 5);
+  },
+  resize() { this.judgeY = H * 0.76; },
+  begin() {
+    const t0 = AudioSys.startBgm('rain');
+    this.base = t0 || (AudioSys.now() + 0.5);
+    this.beatSec = 60 / CONFIG.ch4.bpm;
+    const offs = [0, 2, 4, 6, 8, 10, 12, 13, 16, 18, 20, 21, 24, 25, 26, 28, 30, 32, 33, 36];
+    const intro = 8;
+    this.notes = offs.slice(0, CONFIG.ch4.totalNotes).map((o, i) => ({
+      t: this.base + (intro + o) * this.beatSec, lane: i % 3, hit: false, miss: false,
+    }));
+    this.hits = 0; this.misses = 0; this.endT = 0;
+    this.playing = true;
+  },
+  update(dt) {
+    M.tx = W * 0.22 + Math.sin(S.time * 1.2) * 12; M.ty = H * 0.3;
+    M.update(dt, 0, 0);
+    setMeters(SCENARIO.TOP, 5, 5);
+    for (let i = this.rains.length - 1; i >= 0; i--) {
+      const r = this.rains[i]; r.y += r.v * dt;
+      if (r.y > H) this.rains.splice(i, 1);
+    }
+    if (!this.playing) return;
+    const now = AudioSys.now();
+    const win = CONFIG.ch4.hitWindowMs / 1000;
+    this.notes.forEach(n => {
+      if (!n.hit && !n.miss && now > n.t + win) {
+        n.miss = true; this.misses++;
+        AudioSys.sMiss(); M.setFace('hurt', 0.5);
+        if (this.misses % CONFIG.ch4.missesPerHeart === 0) loseHeart('빗방울을 놓쳤어…');
+      }
+    });
+    const allDone = this.notes.every(n => n.hit || n.miss);
+    if (allDone) {
+      this.endT += dt;
+      if (this.endT > 1.2) {
+        this.playing = false;
+        if (this.hits >= CONFIG.ch4.needHits) this.clear();
+        else {
+          toast(`빗방울 ${this.hits} / ${CONFIG.ch4.needHits}… 조금 더! 다시 도전!`);
+          setTimeout(() => { if (S.chapter === 4 && !S.paused) this.begin(); }, 1600);
+        }
+      }
+    }
+  },
+  clear() {
+    M.setFace('proud', 3);
+    for (let i = 0; i < 26; i++) this.rains.push({ x: Math.random() * W, y: Math.random() * H * 0.5, v: 480 + Math.random() * 200, l: 18 });
+    chapterCleared('비 뿌리기 성공! (숨은열 방출)',
+      [
+        { face: 'proud', text: '시원하다~! 몸속 물방울을 <b>비</b>로 내려 주고 나니 아주 가벼워!' },
+        { face: 'normal', text: '물방울이 맺힐 때마다 <span class="kw">숨은열</span>이 나와서 몸이 덜 식었어. 산을 오르는 구름이 비를 뿌리는 이유, 이제 알겠지?' },
+        { face: 'happy', text: '영동 쪽 비탈은 촉촉하게 젖었어. 자, 이제 산 너머로!' },
+      ],
+      () => startChapter(5));
+  },
+  pd(x, y) {
+    if (!this.playing) return;
+    const now = AudioSys.now();
+    if (now - this.lastTap < 0.12) return;
+    this.lastTap = now;
+    const win = CONFIG.ch4.hitWindowMs / 1000;
+    let best = null, bd = 1e9;
+    this.notes.forEach(n => {
+      if (n.hit || n.miss) return;
+      const d = Math.abs(now - n.t);
+      if (d < bd) { bd = d; best = n; }
+    });
+    if (best && bd <= win) {
+      best.hit = true; this.hits++;
+      AudioSys.sHit(); M.setFace('happy', 0.5);
+      const lx = this.lanes[best.lane] * W;
+      spawnParticles(lx, this.judgeY, 10, ['#9FD0F0', '#D3ECFF', '#FFFFFF'], 130, 0.6);
+      for (let i = 0; i < 3; i++) this.rains.push({ x: lx + (Math.random() - 0.5) * 40, y: this.judgeY, v: 500, l: 16 });
+    }
+  },
+  draw(c, t) {
+    skyGrad(c, '#9FB4CE', '#CFDCE4');
+    // 능선 실루엣
+    c.fillStyle = '#A9C8B4';
+    c.beginPath(); c.moveTo(0, H);
+    for (let x = 0; x <= W; x += 40) c.lineTo(x, H * 0.86 + Math.sin(x * 0.01 + 2) * 26 - (x < W * 0.3 ? (W * 0.3 - x) * 0.16 : 0));
+    c.lineTo(W, H); c.fill();
+    // 레인 & 판정선
+    c.strokeStyle = 'rgba(255,255,255,.4)'; c.lineWidth = 2;
+    this.lanes.forEach(l => { c.beginPath(); c.moveTo(l * W, 0); c.lineTo(l * W, this.judgeY + 24); c.stroke(); });
+    c.strokeStyle = '#7FA8D8'; c.lineWidth = 5; c.setLineDash([16, 10]);
+    c.beginPath(); c.moveTo(this.lanes[0] * W - 70, this.judgeY); c.lineTo(this.lanes[2] * W + 70, this.judgeY); c.stroke(); c.setLineDash([]);
+    c.fillStyle = '#57729B'; c.font = '17px Jua';
+    c.fillText('판정선 — 빗방울이 닿는 순간 탭!', this.lanes[0] * W - 70, this.judgeY + 30);
+    // 노트
+    const now = AudioSys.now(), fall = CONFIG.ch4.fallSec;
+    this.notes.forEach(n => {
+      if (n.hit) return;
+      const dtN = n.t - now;
+      if (dtN > fall || dtN < -0.25) return;
+      const y = this.judgeY - (dtN / fall) * (this.judgeY + 50);
+      const x = this.lanes[n.lane] * W;
+      c.fillStyle = n.miss ? 'rgba(200,160,160,.5)' : '#8FC4EC';
+      c.strokeStyle = n.miss ? 'rgba(170,130,130,.5)' : '#5D9BD3'; c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(x, y - 16); c.quadraticCurveTo(x + 13, y + 2, x, y + 13); c.quadraticCurveTo(x - 13, y + 2, x, y - 16);
+      c.fill(); c.stroke();
+    });
+    // 내리는 비
+    c.strokeStyle = 'rgba(140,190,235,.8)'; c.lineWidth = 3; c.lineCap = 'round';
+    this.rains.forEach(r => { c.beginPath(); c.moveTo(r.x, r.y); c.lineTo(r.x - 3, r.y + r.l); c.stroke(); });
+    // 숨은열 게이지
+    const gw = Math.min(420, W * 0.4), gx = W / 2 - gw / 2, gy = 112;
+    c.fillStyle = 'rgba(255,251,243,.85)'; c.strokeStyle = '#E9CDB4'; c.lineWidth = 3;
+    c.beginPath(); c.roundRect(gx - 12, gy - 24, gw + 24, 56, 16); c.fill(); c.stroke();
+    c.fillStyle = '#9A7E6E'; c.font = '15px Jua'; c.textAlign = 'center';
+    c.fillText(`숨은열 방출 게이지 — 성공 ${this.hits} / ${CONFIG.ch4.needHits} (miss ${this.misses})`, W / 2, gy - 6);
+    c.textAlign = 'left';
+    c.fillStyle = '#F3E3D2'; c.beginPath(); c.roundRect(gx, gy + 2, gw, 16, 8); c.fill();
+    c.fillStyle = '#F5A76C'; c.beginPath();
+    c.roundRect(gx, gy + 2, gw * clamp(this.hits / CONFIG.ch4.needHits, 0, 1), 16, 8); c.fill();
+    M.draw(c, t);
+  },
+};
+const ch4 = {
+  start(skip) {
+    AudioSys.stopBgm();
+    setScene(Ch4Scene);
+    const begin = () => { Ch4Scene.begin(); toast('리듬에 맞춰 탭! 🌧', true, 2000); };
+    if (skip) { begin(); return; }
+    Dialog.run([
+      { face: 'surprised', text: '으윽, 몸이 무거워… 물방울이 가득 모였나 봐!' },
+      { face: 'normal', text: '정상을 넘기 전에, 영동 쪽 비탈에 <b>비를 뿌리고 가자</b>!' },
+      { face: 'happy', text: '빗방울이 <b>판정선에 닿는 순간</b> 화면을 탭! 20방울 중 <b>14방울</b>은 성공해야 해!' },
+      { face: 'proud', text: '탭할 때마다 <span class="kw">숨은열</span>이 뿜뿜! 준비됐지? 음악 시~작!' },
+    ], begin);
+  },
+};
+
+/* ============================================================
+   5장 — 산 너머로 (풍하측 하강, 부드러운 착지)
+   ============================================================ */
+const Ch5Scene = {
+  playing: false, camX: 0, camY: 0, pxX: 0, pxY: 0, worldTopKm: 2.6, worldWKm: 4.4,
+  landed: false, poofed: false,
+  terrain(x) { return 2.0 * (1 - smooth(clamp((x - 0.15) / 2.9, 0, 1))); },
+  zone() { return { a: 3.25, b: 3.95 }; },
+  enter() {
+    this.pxX = W / 2.2; this.pxY = H / 1.55;
+    M.visible = true; M.coat = true; M.baseFace = 'cloud';
+    this.camX = 0; this.camY = 0; this.clampCam();
+    const sp = this.w2s(0.3, 2.25);
+    M.place(sp.x, sp.y);
+    this.playing = false; this.landed = false; this.poofed = false;
+  },
+  resize() { this.pxX = W / 2.2; this.pxY = H / 1.55; this.clampCam(); },
+  w2s(xKm, hKm) { return { x: xKm * this.pxX - this.camX, y: (this.worldTopKm - hKm) * this.pxY - this.camY }; },
+  mWorld() { return { x: (M.x + this.camX) / this.pxX, h: this.worldTopKm - (M.y + this.camY) / this.pxY }; },
+  clampCam() {
+    this.camX = clamp(this.camX, 0, this.worldWKm * this.pxX - W);
+    this.camY = clamp(this.camY, 0, this.worldTopKm * this.pxY + 140 - H);
+  },
+  update(dt) {
+    // 자연 하강 + 바람
+    if (this.playing && !M.held && !this.landed) {
+      M.ty += CONFIG.ch5.sinkKmPerSec * this.pxY * dt * 0.55;
+      M.tx += 26 * dt;
+    }
+    M.update(dt, this.pxX, this.pxY);
+    const mw = this.mWorld();
+    const h = clamp(mw.h, 0, 2.4);
+    const st = descendFrom(5, 5, SCENARIO.TOP, clamp(h, 0, SCENARIO.TOP));
+    setMeters(h, st.T, st.Td);
+    if (!this.landed) M.baseFace = h < 0.7 ? 'hot' : h < 1.5 ? 'normal' : 'cloud';
+    // 구름 옷 증발
+    if (this.playing && M.coat && h < 1.75) {
+      M.coat = false; this.poofed = true;
+      spawnParticles(M.x, M.y, 18, ['#FFFFFF', '#EAF3FB'], 120, 0.9, -20);
+      toast('구름 옷이 사르르… (내려가며 증발!)', true, 1800);
+    }
+    // 카메라
+    const dCamX = clamp(mw.x * this.pxX - W * 0.42, 0, Math.max(0, this.worldWKm * this.pxX - W)) - this.camX;
+    const dCamY = clamp((this.worldTopKm - mw.h) * this.pxY - H * 0.45, 0, this.worldTopKm * this.pxY + 140 - H) - this.camY;
+    const kx = Math.min(1, dt * 3.5);
+    this.camX += dCamX * kx; M.x -= dCamX * kx; M.tx -= dCamX * kx;
+    this.camY += dCamY * kx; M.y -= dCamY * kx; M.ty -= dCamY * kx;
+    if (!this.playing || this.landed) return;
+    const z = this.zone();
+    const ter = this.terrain(mw.x);
+    if (mw.h <= ter + 0.05) {
+      if (ter < 0.03) { // 평지 접지
+        const speed = -M.vyS; // 하강 속도(양수)
+        if (mw.x >= z.a && mw.x <= z.b) {
+          if (speed <= CONFIG.ch5.maxLandKmPerSec) this.land(mw);
+          else {
+            AudioSys.sThud();
+            loseHeart(`쿵! 너무 빨랐어 (${fmt1(speed)} km/s ≥ ${CONFIG.ch5.maxLandKmPerSec})`);
+            M.held = false; const p = this.w2s(mw.x - 0.3, 0.9); M.place(p.x, p.y);
+          }
+        } else {
+          loseHeart('여긴 착지 존이 아니야!');
+          M.held = false; const p = this.w2s((z.a + z.b) / 2 - 0.5, 1.0); M.place(p.x, p.y);
+        }
+      } else { // 비탈 충돌
+        loseHeart('비탈에 쿵! 조심조심~');
+        M.held = false; const p = this.w2s(mw.x, ter + 0.5); M.place(p.x, p.y);
+      }
+    }
+  },
+  land(mw) {
+    this.landed = true; this.playing = false; M.held = false;
+    const p = this.w2s(mw.x, 0.06); M.place(p.x, p.y);
+    M.baseFace = 'hot'; M.setFace('happy', 2);
+    AudioSys.sClear();
+    spawnParticles(M.x, M.y + 20, 16, ['#F6E7C8', '#FFD9B0'], 110, 0.8);
+    chapterCleared('영서 도착: 25℃ · 이슬점 9℃',
+      [
+        { face: 'happy', text: '사뿐히 착지 성공! 영서 지방에 도착했어~!' },
+        { face: 'hot', text: '…그런데 잠깐, <b>너무 더워</b>! 내려오면서 몸이 꾹꾹 눌리더니 <b>1 km에 10℃씩</b> 뜨거워졌어!' },
+        { face: 'surprised', text: '지금 <b>25℃</b>! 출발할 때(20℃)보다 <b>5℃나 높잖아</b>? 이슬점은 9℃… 몸도 바싹 말랐어.' },
+      ],
+      () => startChapter(6));
+  },
+  pd(x, y) { tryGrab(x, y); },
+  pm(x, y) { dragTo(x, y, 40, W - 40, 40, H - 30); },
+  pu() { M.held = false; },
+  draw(c, t) {
+    skyGrad(c, '#BFD8EA', '#FFE9CE');
+    drawSun(c, W * 0.78, H * 0.14, 40, t);
+    // 산(왼쪽에서 내려감)
+    c.fillStyle = '#C9DFC2'; c.strokeStyle = '#A8CBA0'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(-20, H + 20);
+    for (let sx = -20; sx <= W + 20; sx += 20) {
+      const xKm = (sx + this.camX) / this.pxX;
+      c.lineTo(sx, this.w2s(0, this.terrain(xKm)).y);
+    }
+    c.lineTo(W + 20, H + 20); c.closePath(); c.fill(); c.stroke();
+    // 착지 존
+    const z = this.zone();
+    const za = this.w2s(z.a, 0), zb = this.w2s(z.b, 0);
+    c.fillStyle = `rgba(150,210,180,${0.35 + Math.sin(t * 3) * 0.1})`;
+    c.beginPath(); c.roundRect(za.x, za.y - 10, zb.x - za.x, 26, 10); c.fill();
+    c.strokeStyle = '#5FBF8A'; c.lineWidth = 3; c.strokeRect(za.x, za.y - 10, zb.x - za.x, 26);
+    c.fillStyle = '#4E9A6E'; c.font = '18px Jua'; c.textAlign = 'center';
+    c.fillText('🚩 착지 존 — 사뿐히!', (za.x + zb.x) / 2, za.y - 22); c.textAlign = 'left';
+    // 마을
+    const hp = this.w2s(4.1, 0);
+    if (hp.x < W + 80) {
+      c.fillStyle = '#F2D8AE'; c.strokeStyle = '#D9B583'; c.lineWidth = 3;
+      [[0, 34, 26], [46, 28, 22]].forEach(([dx, w2, h2]) => {
+        c.beginPath(); c.roundRect(hp.x + dx, hp.y - h2, w2, h2, 4); c.fill(); c.stroke();
+        c.fillStyle = '#E8967A';
+        c.beginPath(); c.moveTo(hp.x + dx - 5, hp.y - h2); c.lineTo(hp.x + dx + w2 / 2, hp.y - h2 - 16); c.lineTo(hp.x + dx + w2 + 5, hp.y - h2); c.closePath(); c.fill();
+        c.fillStyle = '#F2D8AE';
+      });
+    }
+    // 하강 속도계
+    if (this.playing && !this.landed) {
+      const spd = Math.max(0, -M.vyS);
+      const bad = spd > CONFIG.ch5.maxLandKmPerSec;
+      c.fillStyle = 'rgba(255,251,243,.85)'; c.strokeStyle = bad ? '#F0A08C' : '#E9CDB4'; c.lineWidth = 3;
+      c.beginPath(); c.roundRect(W / 2 - 130, 70, 260, 44, 14); c.fill(); c.stroke();
+      c.fillStyle = bad ? '#C9603C' : '#4E9A6E'; c.font = '19px Jua'; c.textAlign = 'center';
+      c.fillText(`하강 속도 ${fmt1(spd)} km/s ${bad ? '⚠ 너무 빨라!' : '👍'}`, W / 2, 98);
+      c.textAlign = 'left';
+    }
+    M.draw(c, t);
+  },
+};
+const ch5 = {
+  start(skip) {
+    AudioSys.startBgm('rise');
+    setScene(Ch5Scene);
+    const begin = () => { Ch5Scene.playing = true; toast('초록 착지 존에 천천히, 사뿐히!', true, 2400); };
+    if (skip) { begin(); return; }
+    Dialog.run([
+      { face: 'proud', text: '드디어 반대쪽이 보여! 저 아래가 <b>영서 지방</b>이야.' },
+      { face: 'normal', text: '비를 다 뿌려서 몸이 홀쭉해. 내려가는 동안엔 응결도 없으니 그냥 <b>맑은 공기</b>로 내려가!' },
+      { face: 'surprised', text: '내려갈 땐 공기가 눌려서 <b>1 km에 10℃씩</b> 따뜻해진대. 계기판을 봐 둬!' },
+      { face: 'happy', text: '초록 <b>착지 존</b>에 <b>천천히(0.8 km/s 미만)</b> 내려 줘. 너무 빠르면 쿵 해!' },
+    ], begin);
+  },
+};
+
+/* ============================================================
+   6장 — 엔딩: 뜨거워진 뭉게 (비교 카드 + 그래프 리플레이)
+   ============================================================ */
+const Ch6Scene = {
+  enter() {
+    M.visible = true; M.coat = false; M.baseFace = 'hot';
+    M.place(W * 0.5, H * 0.62);
+    setMeters(0, 25, 9);
+  },
+  resize() {},
+  update(dt) {
+    M.tx = W * 0.5 + Math.sin(S.time * 0.8) * 20; M.ty = H * 0.62 + Math.sin(S.time * 1.6) * 8;
+    M.update(dt, 0, 0);
+    setMeters(0, 25, 9);
+  },
+  draw(c, t) {
+    skyGrad(c, '#FFDFB8', '#FFF3DC');
+    drawSun(c, W * 0.2, H * 0.18, 46, t);
+    c.fillStyle = '#F6E7C8'; c.fillRect(0, H * 0.8, W, H * 0.2);
+    c.strokeStyle = '#E3C68F'; c.lineWidth = 3;
+    for (let i = 0; i < 8; i++) {
+      const x = (i + 0.5) * W / 8;
+      c.beginPath(); c.moveTo(x - 10, H * 0.88); c.quadraticCurveTo(x, H * 0.83, x + 10, H * 0.88); c.stroke();
+    }
+    M.draw(c, t);
+  },
+};
+let graphAnim = null;
+function drawFoehnGraph(gc, u) { // u: 0~1 진행
+  const gw = gc.canvas.width, gh = gc.canvas.height;
+  gc.clearRect(0, 0, gw, gh);
+  const L = 74, R = gw - 26, T = 30, B = gh - 52;
+  const x4T = temp => L + (temp - 0) / 30 * (R - L);
+  const y4H = h => B - h / 2.2 * (B - T);
+  // 격자·축
+  gc.strokeStyle = '#EFE0CC'; gc.lineWidth = 1.5; gc.font = '14px Jua';
+  for (let temp = 0; temp <= 30; temp += 5) {
+    gc.beginPath(); gc.moveTo(x4T(temp), T); gc.lineTo(x4T(temp), B); gc.stroke();
+    gc.fillStyle = '#A98D77'; gc.textAlign = 'center'; gc.fillText(temp + '℃', x4T(temp), B + 22);
+  }
+  for (let h = 0; h <= 2; h += 0.5) {
+    gc.beginPath(); gc.moveTo(L, y4H(h)); gc.lineTo(R, y4H(h)); gc.stroke();
+    gc.fillStyle = '#A98D77'; gc.textAlign = 'right'; gc.fillText(h.toFixed(1) + 'km', L - 8, y4H(h) + 5);
+  }
+  gc.strokeStyle = '#C9B49A'; gc.lineWidth = 2.5;
+  gc.beginPath(); gc.moveTo(L, T - 6); gc.lineTo(L, B); gc.lineTo(R + 6, B); gc.stroke();
+  // 응결 고도 표시선
+  gc.strokeStyle = 'rgba(120,150,220,.55)'; gc.setLineDash([7, 7]); gc.lineWidth = 2;
+  gc.beginPath(); gc.moveTo(L, y4H(1)); gc.lineTo(R, y4H(1)); gc.stroke(); gc.setLineDash([]);
+  gc.fillStyle = '#6E86B8'; gc.textAlign = 'left'; gc.font = '13px Jua';
+  gc.fillText('응결 고도 1.0 km', R - 118, y4H(1) - 7);
+  // 경로: 상승(20,0)→(10,1)→(5,2), 하강(5,2)→(25,0)
+  const P = [[20, 0], [10, 1], [5, 2], [25, 0]];
+  const segs = [[P[0], P[1], '#6E9FD8'], [P[1], P[2], '#7FB6E8'], [P[2], P[3], '#E8926C']];
+  const total = 3;
+  const prog = u * total;
+  segs.forEach((sg, i) => {
+    const f = clamp(prog - i, 0, 1);
+    if (f <= 0) return;
+    const [a, b, col] = sg;
+    gc.strokeStyle = col; gc.lineWidth = 5; gc.lineCap = 'round';
+    gc.beginPath(); gc.moveTo(x4T(a[0]), y4H(a[1]));
+    gc.lineTo(x4T(lerp(a[0], b[0], f)), y4H(lerp(a[1], b[1], f))); gc.stroke();
+  });
+  // 꼭짓점 라벨
+  const labels = [['출발 20℃', 20, 0, 0.02, '#4E6E9C', -42, -12], ['응결! 10℃', 10, 1, 1, '#4E6E9C', -6, -12],
+    ['정상 5℃', 5, 2, 2, '#4E6E9C', 6, -10], ['도착 25℃!', 25, 0, 3, '#C9603C', -6, -14]];
+  gc.font = '15px Jua'; gc.textAlign = 'center';
+  labels.forEach(([txt, temp, h, at, col, dx, dy]) => {
+    if (prog >= at) {
+      gc.fillStyle = col;
+      gc.beginPath(); gc.arc(x4T(temp), y4H(h), 5.5, 0, TAU); gc.fill();
+      gc.fillText(txt, x4T(temp) + dx, y4H(h) + dy);
+    }
+  });
+  // 기울기 라벨
+  gc.font = '13.5px Jua';
+  if (prog > 0.4) { gc.fillStyle = '#6E9FD8'; gc.fillText('−10℃/km (건조)', x4T(16.5) - 46, y4H(0.5)); }
+  if (prog > 1.5) { gc.fillStyle = '#7FB6E8'; gc.fillText('−5℃/km (습윤·비!)', x4T(7.5) - 56, y4H(1.55)); }
+  if (prog > 2.5) { gc.fillStyle = '#E8926C'; gc.fillText('+10℃/km (건조)', x4T(16) + 66, y4H(1.05)); }
+  // 이동하는 뭉게 점
+  let pos;
+  if (prog < 1) pos = [lerp(20, 10, prog), lerp(0, 1, prog)];
+  else if (prog < 2) pos = [lerp(10, 5, prog - 1), lerp(1, 2, prog - 1)];
+  else pos = [lerp(5, 25, clamp(prog - 2, 0, 1)), lerp(2, 0, clamp(prog - 2, 0, 1))];
+  gc.fillStyle = '#FFFFFF'; gc.strokeStyle = '#E3C6A8'; gc.lineWidth = 3;
+  gc.beginPath(); gc.arc(x4T(pos[0]), y4H(pos[1]), 13, 0, TAU); gc.fill(); gc.stroke();
+  gc.fillStyle = '#5B4A44';
+  gc.beginPath(); gc.arc(x4T(pos[0]) - 4, y4H(pos[1]) - 2, 1.8, 0, TAU); gc.arc(x4T(pos[0]) + 4, y4H(pos[1]) - 2, 1.8, 0, TAU); gc.fill();
+}
+function startGraphAnim() {
+  const gcv = $('graphCv'); if (!gcv) return;
+  const gc = gcv.getContext('2d');
+  const t0 = performance.now();
+  cancelAnimationFrame(graphAnim);
+  const step = now => {
+    if (!document.body.contains(gcv)) return;
+    const u = clamp((now - t0) / 7000, 0, 1);
+    drawFoehnGraph(gc, u);
+    if (u < 1) graphAnim = requestAnimationFrame(step);
+  };
+  graphAnim = requestAnimationFrame(step);
+}
+const ch6 = {
+  start(skip) {
+    AudioSys.startBgm('warm');
+    setScene(Ch6Scene);
+    const showCompare = () => {
+      S.paused = true;
+      showOverlay(`
+        <div class="panel">
+          <h2>출발의 뭉게 vs 도착의 뭉게</h2>
+          <div class="cmpRow">
+            <div class="cmpCard cool"><h3>🌊 영동 해안 (출발)</h3>
+              <div class="big">20℃</div><p>이슬점 12℃ · 촉촉촉</p></div>
+            <div class="cmpCard hot"><h3>🌾 영서 지방 (도착)</h3>
+              <div class="big">25℃</div><p>이슬점 9℃ · 바싹바싹</p></div>
+          </div>
+          <p>같은 공기인데 산을 넘었더니 <b>+5℃ 더 뜨겁고, 더 건조</b>해졌어요!<br>어떻게 이런 일이? 뭉게의 여정을 그래프로 다시 볼까요?</p>
+          <button class="btn" id="toGraphBtn">📈 여정 그래프 보기</button>
+        </div>`);
+      $('toGraphBtn').addEventListener('pointerdown', e => {
+        e.stopPropagation(); AudioSys.sPop(); showGraph();
+      });
+    };
+    const showGraph = () => {
+      showOverlay(`
+        <div class="panel">
+          <h2>높이 – 온도 그래프 리플레이</h2>
+          <canvas id="graphCv" width="720" height="400"></canvas>
+          <p style="margin-top:8px">올라갈 땐 <b>−10</b> → 구름 옷 뒤엔 <b>−5</b>로 꺾이고, 내려올 땐 <b>+10</b> 직선!<br>
+          이 삼각형 경로가 바로 <b>푄(Föhn)</b> — 우리나라에선 <b>높새바람</b>이에요.</p>
+          <button class="btn sub" id="replayBtn">↺ 다시 보기</button>
+          <button class="btn" id="graphDoneBtn">계속 ➜</button>
+        </div>`);
+      startGraphAnim();
+      $('replayBtn').addEventListener('pointerdown', e => { e.stopPropagation(); startGraphAnim(); });
+      $('graphDoneBtn').addEventListener('pointerdown', e => {
+        e.stopPropagation(); AudioSys.sPop();
+        hideOverlay(); S.paused = false;
+        Dialog.run([
+          { face: 'proud', text: '산을 넘으며 비를 뿌리고, 반대쪽에서 <b>더 뜨겁고 건조하게</b> 부는 바람 — 이게 바로 <b>높새바람</b>이야!' },
+          { face: 'normal', text: '늦봄~초여름, 오호츠크해 기단이 태백산맥을 넘으면 영서 지방이 이렇게 후끈해진대.' },
+        ], () => {
+          chapterCleared('높새바람! +5℃ · 더 건조', [], () => startChapter(7));
+        });
+      });
+    };
+    const intro = () => Dialog.run([
+      { face: 'hot', text: '후아… 영서 지방, 정말 <b>뜨거워</b>! 몸이 발갛게 익을 것 같아~' },
+      { face: 'surprised', text: '내가 어떻게 변했는지, 여행을 정리해 볼까?' },
+    ], showCompare);
+    intro();
+  },
+};
+
+/* ============================================================
+   7장 — 에필로그: 하늘의 성격 (안정도 자유 실험)
+   ============================================================ */
+const Ch7Scene = {
+  map: null, gamma: 8, simV: 0, h: 0, pokeIdx: 0, verdict: '', verdictT: 0,
+  atTop: false, settled: true, cloudGrow: 0, stratus: 0,
+  enter() {
+    this.map = vertMap(2.3);
+    M.visible = true; M.coat = false; M.baseFace = 'normal';
+    M.place(W * 0.46, this.map.kmToY(0.02));
+    this.simV = 0; this.h = 0.02; this.verdict = ''; this.atTop = false; this.settled = true;
+    this.cloudGrow = 0; this.stratus = 0;
+    this.readout();
+  },
+  resize() { this.map = vertMap(2.3); },
+  alt() { return clamp(this.map.yToKm(M.y), 0, 2.3); },
+  stabLabel() {
+    const s = stability(this.gamma);
+    return s === 'stable' ? '절대 안정 (γ < 5)' : s === 'unstable' ? '절대 불안정 (γ > 10)' : '조건부 불안정 (5 ≤ γ ≤ 10)';
+  },
+  readout(extra) {
+    $('gammaVal').textContent = `${fmt1(this.gamma)} ℃/km`;
+    $('stabRead').innerHTML = `<b>${this.stabLabel()}</b>${extra ? '<br>' + extra : '<br>뭉게를 찔러 올리거나 끌어올려 보세요!'}`;
+  },
+  poke() {
+    AudioSys.sWhoosh();
+    const p = CONFIG.ch7.pokePowers;
+    this.simV += p[this.pokeIdx % p.length];
+    this.pokeIdx++;
+    this.settled = false; this.verdict = ''; this.cloudGrow = 0; this.stratus = 0;
+    M.setFace('surprised', 0.8);
+  },
+  setGamma(g) {
+    this.gamma = g;
+    $('gammaSlider').value = g;
+    this.verdict = ''; this.cloudGrow = 0; this.stratus = 0;
+    document.querySelectorAll('#simPanel .chip').forEach(ch => ch.classList.toggle('sel', Number(ch.dataset.g) === g));
+    this.readout();
+  },
+  update(dt) {
+    if (M.held) this.h = this.alt(); // 드래그 중엔 손 위치가 곧 고도
+    const h = this.h;
+    const st = riseState(SCENARIO.T0, SCENARIO.Td0, h);
+    setMeters(h, st.T, st.Td);
+    M.coat = st.saturated;
+    if (M.held) { this.simV = 0; this.settled = false; this.verdict = ''; this.cloudGrow = 0; this.stratus = 0; }
+    else if (!this.settled) {
+      const Tp = st.T, Te = envTemp(SCENARIO.T0, this.gamma, h);
+      this.simV += CONFIG.ch7.buoyAccel * (Tp - Te) * dt * 3;
+      this.simV *= (1 - 0.45 * dt);
+      let nh = h + this.simV * dt;
+      if (nh <= 0) {
+        nh = 0;
+        if (Math.abs(this.simV) < 0.08) {
+          this.simV = 0; this.settled = true;
+          if (!this.verdict) {
+            this.verdict = 'stable';
+            this.stratus = 0.01;
+            AudioSys.sPop();
+            this.readout('제자리로 돌아왔어요 → <b>안정</b>! 하늘이 얌전~ (넓게 퍼지는 <b>층운형</b> 구름)');
+            M.setFace('normal', 2);
+          }
+        } else this.simV = -this.simV * 0.35;
+      }
+      if (nh >= 2.25) {
+        nh = 2.25;
+        if (!this.verdict) {
+          this.verdict = 'unstable'; this.cloudGrow = 0.01;
+          AudioSys.sSparkle();
+          this.readout('계속 솟아올라요 → <b>불안정</b>! 하늘이 부글부글 (뭉게뭉게 <b>적운형</b> 구름 ⛈)');
+          M.setFace('happy', 2);
+        }
+        this.simV = 0;
+      }
+      this.h = nh;
+      M.ty = this.map.kmToY(nh);
+      // 상승 중 되돌아옴 감지 도움말
+      if (!this.verdict && this.simV < -0.05 && h > 0.3 && stability(this.gamma) === 'conditional') {
+        this.readout('살짝 밀면 돌아오네…? 뭉게를 <b>손으로 1.7 km쯤까지 끌어올렸다 놓아</b> 보자! (구름 옷을 입으면 달라질지도?)');
+      }
+    }
+    M.update(dt, 0, this.map.pxPerKm);
+    if (this.cloudGrow > 0) this.cloudGrow = Math.min(1, this.cloudGrow + dt * 0.7);
+    if (this.stratus > 0) this.stratus = Math.min(1, this.stratus + dt * 0.7);
+  },
+  pd(x, y) { if (tryGrab(x, y)) { this.simV = 0; } },
+  pm(x, y) { dragTo(x, y, 60, W - 60, 60, this.map.groundY - 6); },
+  pu() {
+    if (M.held) {
+      M.held = false; this.h = clamp(this.map.yToKm(M.ty), 0, 2.25);
+      this.settled = false; this.verdict = ''; this.simV = 0; this.cloudGrow = 0; this.stratus = 0;
+    }
+  },
+  draw(c, t) {
+    // 감률에 따라 하늘 분위기 변화
+    const s = stability(this.gamma);
+    skyGrad(c, s === 'unstable' ? '#B8C8E8' : s === 'stable' ? '#CFE4EE' : '#C2D8EC', '#F5EFE2');
+    c.fillStyle = '#D8E8D2'; c.fillRect(0, this.map.groundY, W, H - this.map.groundY);
+    drawAltRuler(c, this.map.kmToY, 2, [{ h: 1.0, label: '응결 고도 1.0 km', color: 'rgba(120,150,220,.8)' }]);
+    // 환경 기온 표(오른쪽)
+    c.font = '16px Jua'; c.textAlign = 'right';
+    for (let h = 0; h <= 2; h += 0.5) {
+      const Te = envTemp(SCENARIO.T0, this.gamma, h);
+      const Tp = riseState(SCENARIO.T0, SCENARIO.Td0, h).T;
+      const y = this.map.kmToY(h);
+      c.fillStyle = '#8B6F5C';
+      c.fillText(`주위 ${fmt1(Te)}℃`, W - 26, y - 4);
+      c.fillStyle = Tp > Te ? '#D97F62' : '#6E86B8';
+      c.fillText(`뭉게 ${fmt1(Tp)}℃ ${Tp > Te ? '▲' : Tp < Te ? '▼' : '―'}`, W - 26, y + 16);
+    }
+    c.textAlign = 'left';
+    // 결과 구름
+    if (this.stratus > 0) {
+      c.save(); c.globalAlpha = this.stratus * 0.85;
+      c.fillStyle = '#EDF2F5'; c.strokeStyle = '#D5E0E8'; c.lineWidth = 3;
+      for (let i = 0; i < 3; i++) {
+        const y = this.map.kmToY(0.55 + i * 0.12);
+        c.beginPath(); c.roundRect(W * 0.18 + i * 24, y, W * 0.5 - i * 48, 20, 12); c.fill(); c.stroke();
+      }
+      c.restore();
+    }
+    if (this.cloudGrow > 0) {
+      const g = this.cloudGrow;
+      c.save(); c.globalAlpha = Math.min(0.9, g);
+      for (let i = 0; i < 5; i++) {
+        const hh = 1.0 + (1.2 * g) * (i / 4);
+        drawCloudBlob(c, M.x + Math.sin(i * 2.4) * 46 * g, this.map.kmToY(hh), 26 + 14 * g, i * 5 + 2, t, 0.9);
+      }
+      c.restore();
+    }
+    M.draw(c, t);
+  },
+};
+const ch7 = {
+  start(skip) {
+    AudioSys.startBgm('sea');
+    setScene(Ch7Scene);
+    const begin = () => {
+      $('simPanel').classList.add('on');
+      Ch7Scene.setGamma(8);
+      toast('γ 슬라이더를 바꾸고, 뭉게를 쿡! 찔러 보세요', true, 3000);
+    };
+    if (skip) { begin(); return; }
+    Dialog.run([
+      { face: 'happy', text: '여행하면서 알게 됐어. 하늘에도 <b>성격</b>이 있다는 걸!' },
+      { face: 'normal', text: '주위 공기의 기온이 높이에 따라 얼마나 빨리 식는지 — <span class="kw">기온 감률 γ</span>가 하늘의 성격을 정해.' },
+      { face: 'surprised', text: '나를 <b>쿡 찔러 올렸을 때</b>, 주위보다 따뜻하면 <b>둥실 계속 상승</b>! 차가우면 <b>제자리로 폴짝</b> 돌아와.' },
+      { face: 'happy', text: '왼쪽 아래 실험판으로 γ를 바꿔 가며 마음껏 실험해 봐! 끝나면 <b>여행 끝내기</b>를 눌러 줘.' },
+    ], begin);
+  },
+};
+
+/* ============================================================
+   최종 화면
+   ============================================================ */
+function showEnding() {
+  $('simPanel').classList.remove('on');
+  S.paused = true;
+  AudioSys.startBgm('warm'); AudioSys.sClear();
+  const heartsHtml = Array.from({ length: CONFIG.hearts }, (_, i) =>
+    `<span style="font-size:30px">${i < S.hearts ? '❤️' : '🤍'}</span>`).join('');
+  showOverlay(`
+    <div class="panel">
+      <p class="titleSub">🎓 여정 완주 증서</p>
+      <h1 style="font-size:clamp(26px,5vh,38px)">뭉게와 함께 하늘을 건넜습니다!</h1>
+      <div style="width:110px;margin:6px auto">${faceSVG('proud')}</div>
+      <p>동해 바다(20℃) → 응결 고도 1.0 km → 태백산맥 정상 2.0 km(5℃) → 영서 지방(25℃)<br>
+      <b>단열 변화 · 응결 고도 · 숨은열 · 높새바람 · 대기 안정도</b>까지 모두 통과!</p>
+      <p style="margin-top:8px">남은 하트 ${heartsHtml} <b>${S.hearts}개</b> — 잘했어요, 최고의 바람 안내자!</p>
+      <div>
+        <button class="btn sub" id="backSimBtn">🔬 실험 더 하기</button>
+        <button class="btn" id="toTitleBtn">처음 화면으로</button>
+      </div>
+    </div>`);
+  $('backSimBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation(); hideOverlay(); S.paused = false;
+    $('simPanel').classList.add('on');
+  });
+  $('toTitleBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation(); showTitle();
+  });
+}
+
+/* ============================================================
+   챕터 배열 · 부팅
+   ============================================================ */
+const CHAPTERS = [ch0, ch1, ch2, ch3, ch4, ch5, ch6, ch7];
+
+// 7장 패널 이벤트
+$('gammaSlider').addEventListener('input', e => {
+  Ch7Scene.gamma = Number(e.target.value);
+  document.querySelectorAll('#simPanel .chip').forEach(ch => ch.classList.remove('sel'));
+  Ch7Scene.verdict = ''; Ch7Scene.cloudGrow = 0; Ch7Scene.stratus = 0;
+  Ch7Scene.readout();
+});
+document.querySelectorAll('#simPanel .chip').forEach(ch =>
+  ch.addEventListener('pointerdown', () => { AudioSys.sPop(); Ch7Scene.setGamma(Number(ch.dataset.g)); }));
+$('pokeBtn').addEventListener('pointerdown', () => Ch7Scene.poke());
+$('simEndBtn').addEventListener('pointerdown', () => showEnding());
+$('muteBtn').addEventListener('pointerdown', () => {
+  AudioSys.ensure();
+  AudioSys.setMuted(!AudioSys.muted);
+  $('muteBtn').textContent = AudioSys.muted ? '🔇' : '🔊';
+});
+
+// 메인 루프
+let lastFrame = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastFrame) / 1000);
+  lastFrame = now;
+  S.time += dt;
+  ctx.clearRect(0, 0, W, H);
+  if (scene) {
+    if (!S.paused && !S.dialogActive && scene.update) scene.update(dt);
+    scene.draw(ctx, S.time);
+  }
+  updateParticles(dt);
+  drawParticles(ctx);
+  requestAnimationFrame(loop);
+}
+
+// 속도 스무딩 필드 초기화
+M.vyS = 0; M.vxS = 0;
+const _mUpdate = M.update.bind(M);
+M.update = function (dt, pxX, pxY) {
+  _mUpdate(dt, pxX, pxY);
+  const k = Math.min(1, dt * 9);
+  this.vyS = lerp(this.vyS || 0, this.vyKm, k);
+  this.vxS = lerp(this.vxS || 0, this.vxKm, k);
+};
+
+resize();
+renderHearts(); renderProgress();
+showTitle();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
