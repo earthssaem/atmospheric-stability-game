@@ -1,0 +1,2830 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>모구모구 하늘마을 — 대기 안정도와 강수 미니게임</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+  /* ============ 기본 (뭉게 유니버스 공통 스타일) ============ */
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background:#FFF8EF;
+    font-family:'Jua','Gowun Dodum',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    touch-action:none; overscroll-behavior:none;
+    user-select:none; -webkit-user-select:none;
+    color:#6B564C;
+  }
+  #stage { position:fixed; inset:0; overflow:hidden; }
+  #scene { position:absolute; inset:0; }
+  #scene svg.full { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #fx { position:absolute; inset:0; width:100%; height:100%; z-index:30; pointer-events:none; }
+  #stage.shake { animation:shakeAnim .4s; }
+  @keyframes shakeAnim {
+    0%,100%{transform:translate(0,0)} 20%{transform:translate(-7px,3px)}
+    40%{transform:translate(6px,-4px)} 60%{transform:translate(-5px,-2px)} 80%{transform:translate(4px,3px)}
+  }
+  /* 은은한 종이 질감 */
+  #grain {
+    position:absolute; inset:0; pointer-events:none; z-index:40; opacity:.05; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ============ 공통 애니메이션 ============ */
+  .bob   { animation:bobY 2.8s ease-in-out infinite; }
+  .bob2  { animation:bobY 3.4s ease-in-out .6s infinite; }
+  .drift { animation:driftX 26s linear infinite; }
+  @keyframes bobY   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-9px)} }
+  @keyframes driftX { 0%{transform:translateX(0)} 100%{transform:translateX(220px)} }
+  .spinSlow { animation:spinS 14s linear infinite; transform-origin:center; transform-box:fill-box; }
+  @keyframes spinS { to{transform:rotate(360deg)} }
+
+  /* ============ HUD ============ */
+  #hud { position:absolute; inset:0; pointer-events:none; z-index:50; }
+  .hudCard {
+    background:rgba(255,251,243,.9); border:3px solid #E9CDB4; border-radius:20px;
+    box-shadow:0 3px 0 rgba(214,178,148,.35);
+  }
+  #hudLeft  { position:absolute; top:10px; left:12px; display:flex; gap:8px; }
+  #hudRight { position:absolute; top:10px; right:12px; display:flex; gap:8px; }
+  .hudBtn {
+    pointer-events:auto; cursor:pointer; font-family:inherit;
+    background:rgba(255,251,243,.92); border:3px solid #E9CDB4; border-radius:18px;
+    box-shadow:0 3px 0 rgba(214,178,148,.35);
+    min-width:52px; height:54px; padding:4px 12px;
+    display:flex; align-items:center; justify-content:center; gap:7px;
+    font-size:17px; color:#8A6A52;
+  }
+  .hudBtn:active { transform:translateY(2px); box-shadow:none; }
+  .hudBtn svg { width:30px; height:30px; }
+  .hudBtn .cnt { font-size:16px; color:#B0703F; font-variant-numeric:tabular-nums; }
+  #hintBtn { position:relative; }
+  #hintBtn.pulse::after {
+    content:''; position:absolute; inset:-7px; border-radius:24px;
+    border:3px solid #FFB35C; animation:hintPulse 1.1s ease-out infinite;
+  }
+  @keyframes hintPulse { 0%{opacity:.9; transform:scale(.9)} 100%{opacity:0; transform:scale(1.18)} }
+
+  /* 스테이지 헤더 (가운데): 동물 이름 + 호감도 + 미션 점 */
+  #stageHead {
+    position:absolute; top:10px; left:50%; transform:translateX(-50%);
+    padding:6px 18px; display:none; align-items:center; gap:12px; pointer-events:none;
+  }
+  #stageHead.on { display:flex; }
+  #shFace { width:46px; height:46px; }
+  #shFace svg { width:100%; height:100%; }
+  #shName { font-size:17px; color:#8A5F3E; line-height:1.15; text-align:left; }
+  #shName small { display:block; font-size:12px; color:#B49A85; }
+  #shHearts { display:flex; gap:3px; }
+  #shHearts svg { width:21px; height:19px; }
+  #shDots { display:flex; gap:6px; margin-left:4px; }
+  .mdot { width:12px; height:12px; border-radius:50%; background:#EBD9C6; border:2px solid #DCC0A6; transition:all .3s; }
+  .mdot.done { background:#B7E3C8; border-color:#8FCBA8; }
+  .mdot.cur  { background:#FBC9A8; border-color:#F0A97E; transform:scale(1.28); }
+
+  /* 스테이지 계기판 (우상단 아래) */
+  #meters {
+    position:absolute; top:74px; right:12px; z-index:48; pointer-events:none;
+    padding:6px 14px; display:none; gap:14px;
+  }
+  #meters.on { display:flex; }
+  .meter { text-align:center; min-width:62px; }
+  .meter .lab { font-size:12px; color:#A98D77; }
+  .meter .val { font-size:23px; line-height:1.05; color:#5F4B41; font-variant-numeric:tabular-nums; }
+  .meter .val small { font-size:13px; }
+  #mTd .val { color:#6E86B8; }
+  #mT  .val { color:#D97F62; }
+
+  /* ============ 토스트 / 칭찬 팝업 ============ */
+  #toast {
+    position:absolute; top:19%; left:50%; transform:translate(-50%,0) scale(.85); z-index:60;
+    background:rgba(255,247,236,.96); border:3px solid #F1B9A3; color:#C96A4E;
+    padding:11px 24px; border-radius:24px; font-size:21px; opacity:0; pointer-events:none;
+    transition:opacity .22s, transform .22s; text-align:center; box-shadow:0 4px 0 rgba(214,150,128,.3);
+    max-width:80%;
+  }
+  #toast.show { opacity:1; transform:translate(-50%,0) scale(1); }
+  #toast.good { border-color:#9FD6B4; color:#4E9A6E; box-shadow:0 4px 0 rgba(140,196,164,.35); }
+  #praise {
+    position:absolute; top:30%; left:50%; z-index:65; pointer-events:none; opacity:0;
+    font-size:clamp(34px,7vh,52px); color:#FF8FAB; text-align:center;
+    text-shadow:0 3px 0 #FFF, 0 5px 0 rgba(240,150,170,.25); transform:translate(-50%,-50%) scale(0);
+  }
+  #praise .comboTag {
+    display:block; font-size:clamp(16px,3vh,22px); color:#E8A24E; text-shadow:0 2px 0 #FFF; margin-top:2px;
+  }
+  #praise.pop { animation:praisePop 1.25s ease forwards; }
+  @keyframes praisePop {
+    0%{opacity:0; transform:translate(-50%,-50%) scale(.4) rotate(-7deg)}
+    18%{opacity:1; transform:translate(-50%,-50%) scale(1.16) rotate(3deg)}
+    40%{transform:translate(-50%,-50%) scale(1) rotate(0)}
+    78%{opacity:1}
+    100%{opacity:0; transform:translate(-50%,-74%) scale(1)}
+  }
+
+  /* ============ 대화창 ============ */
+  #dialogWrap { position:absolute; inset:0; z-index:70; display:none; }
+  #dialogWrap.on { display:block; }
+  #dialogBox {
+    position:absolute; left:50%; bottom:20px; transform:translateX(-50%);
+    width:min(780px, 93%); min-height:106px;
+    background:rgba(255,252,246,.97); border:4px solid #E4C3A6; border-radius:28px;
+    box-shadow:0 5px 0 rgba(210,172,140,.35);
+    display:flex; align-items:center; gap:14px; padding:14px 20px 16px 12px;
+  }
+  #dFace { width:84px; height:84px; flex:none; }
+  #dFace svg { width:100%; height:100%; }
+  #dName { position:absolute; top:-17px; left:26px; background:#FBD3AE; border:3px solid #E8B488;
+    border-radius:14px; padding:2px 16px; font-size:15px; color:#8A5F3E; transition:background .2s, border-color .2s; }
+  #dText { font-size:clamp(17px, 2.7vh, 22px); line-height:1.5; color:#5F4B41; flex:1; }
+  #dText b { color:#D9784F; }
+  #dText .kw { color:#5D7FB8; }
+  #dNext { position:absolute; right:22px; bottom:8px; font-size:17px; color:#D9A87F; animation:bobArrow 1s infinite; }
+  @keyframes bobArrow { 0%,100%{transform:translateY(0)} 50%{transform:translateY(4px)} }
+
+  /* ============ 오버레이 패널 ============ */
+  #overlay { position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center;
+    background:rgba(90,70,60,0); transition:background .3s; }
+  #overlay.on { display:flex; background:rgba(90,70,60,.18); }
+  .panel {
+    background:rgba(255,251,243,.98); border:4px solid #E4C3A6; border-radius:32px;
+    box-shadow:0 6px 0 rgba(210,172,140,.35); padding:22px 30px; text-align:center;
+    max-width:min(880px, 94%); max-height:92%; overflow:hidden auto; touch-action:pan-y;
+  }
+  .panel h1 { font-size:clamp(30px,6.4vh,48px); color:#D9784F; letter-spacing:1px; }
+  .panel h2 { font-size:clamp(21px,4.4vh,29px); color:#C96A4E; margin-bottom:6px; }
+  .panel h3 { font-size:clamp(17px,3.2vh,21px); color:#8A6A52; }
+  .panel p  { font-size:clamp(15px,2.6vh,19px); color:#8A7263; line-height:1.55; }
+  .btn {
+    font-family:inherit; font-size:clamp(18px,3vh,23px); color:#7C5A3E; cursor:pointer;
+    background:linear-gradient(#FFE3C2,#FBD0A5); border:3px solid #E8B488; border-radius:22px;
+    padding:11px 32px; margin:8px 6px 0; box-shadow:0 4px 0 rgba(214,158,110,.5);
+  }
+  .btn:active { transform:translateY(3px); box-shadow:none; }
+  .btn.sub  { background:linear-gradient(#EAF3FF,#D8E7FA); border-color:#AFC8E8; color:#57729B; box-shadow:0 4px 0 rgba(150,178,215,.5); }
+  .btn.mint { background:linear-gradient(#E2F7E9,#C8EDD6); border-color:#96D2AE; color:#3E8A62; box-shadow:0 4px 0 rgba(130,190,155,.5); }
+  .btn.pink { background:linear-gradient(#FFE4EC,#FBCBD9); border-color:#EFA8BE; color:#B25476; box-shadow:0 4px 0 rgba(226,150,175,.5); }
+  .btn:disabled { opacity:.42; box-shadow:none; cursor:default; }
+  .titleSub { font-size:clamp(15px,2.8vh,19px); color:#9A7E6E; margin:4px 0 10px; }
+
+  /* ============ 스테이지 내 컨트롤 패널 ============ */
+  .ctrl {
+    position:absolute; z-index:20; pointer-events:auto;
+    background:rgba(255,251,243,.94); border:3px solid #E4C3A6; border-radius:22px;
+    padding:10px 16px; box-shadow:0 4px 0 rgba(210,172,140,.3);
+    touch-action:manipulation;
+  }
+  .ctrl .row { display:flex; align-items:center; gap:10px; margin:5px 0; }
+  .ctrl label { font-size:15px; color:#8A6A52; min-width:64px; }
+  .ctrl .sVal { font-size:20px; min-width:72px; text-align:right; font-variant-numeric:tabular-nums; color:#5F4B41; }
+  .sVal.tCol  { color:#D97F62; }
+  .sVal.tdCol { color:#6E86B8; }
+  .sVal.gCol  { color:#9A78C8; }
+  input[type=range] {
+    -webkit-appearance:none; appearance:none; flex:1; min-width:130px; height:40px; background:transparent; touch-action:pan-x; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height:10px; border-radius:6px; background:#EFDEC8; border:1.5px solid #E0C6A8; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; width:31px; height:31px; border-radius:50%;
+    background:#F0A97E; border:3.5px solid #FFF; box-shadow:0 2px 4px rgba(160,110,70,.35); margin-top:-12px;
+  }
+  input[type=range]::-moz-range-track { height:10px; border-radius:6px; background:#EFDEC8; border:1.5px solid #E0C6A8; }
+  input[type=range]::-moz-range-thumb { width:26px; height:26px; border-radius:50%; background:#F0A97E; border:3.5px solid #FFF; box-shadow:0 2px 4px rgba(160,110,70,.35); }
+  input[type=range].td::-webkit-slider-thumb { background:#7E9AD0; }
+  input[type=range].td::-moz-range-thumb { background:#7E9AD0; }
+  input[type=range].gm::-webkit-slider-thumb { background:#B48EC8; }
+  input[type=range].gm::-moz-range-thumb { background:#B48EC8; }
+  .chip { font-family:inherit; font-size:15px; border-radius:14px; border:2.5px solid #CBB49B; background:#FFF3E4;
+    color:#8A6A52; padding:6px 13px; cursor:pointer; }
+  .chip:active { transform:translateY(2px); }
+  .chip.sel { background:#FBD0A5; border-color:#E8A66F; color:#7C4E28; }
+  .bigBtn {
+    font-family:inherit; font-size:20px; color:#3E8A62; cursor:pointer;
+    background:linear-gradient(#E2F7E9,#C8EDD6); border:3px solid #96D2AE; border-radius:20px;
+    padding:10px 24px; box-shadow:0 4px 0 rgba(130,190,155,.5);
+  }
+  .bigBtn:active { transform:translateY(3px); box-shadow:none; }
+  .bigBtn:disabled { opacity:.4; box-shadow:none; }
+  .bigBtn.orange { color:#B0703F; background:linear-gradient(#FFE3C2,#FBD0A5); border-color:#E8B488; box-shadow:0 4px 0 rgba(214,158,110,.5); }
+
+  /* 의뢰(주문) 카드 */
+  .orderCard {
+    position:absolute; z-index:20; pointer-events:none;
+    background:#FFFDF4; border:3px solid #F0D9A8; border-radius:20px;
+    padding:10px 18px; box-shadow:0 4px 0 rgba(216,186,120,.3);
+    max-width:330px;
+  }
+  .orderCard .oTag { font-size:13px; color:#C89A4E; letter-spacing:1px; }
+  .orderCard .oTxt { font-size:18px; color:#7A5C38; line-height:1.4; margin-top:2px; }
+  .orderCard .oTxt b { color:#D9784F; }
+
+  /* 판정패 / 퀴즈 선택지 */
+  .vRow { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .vCard {
+    font-family:inherit; cursor:pointer; text-align:center;
+    background:#FFFDF6; border:3.5px solid #E4C3A6; border-radius:22px;
+    padding:12px 18px; min-width:128px; box-shadow:0 4px 0 rgba(210,172,140,.35);
+    font-size:19px; color:#7A5C42;
+  }
+  .vCard:active { transform:translateY(3px); box-shadow:none; }
+  .vCard .vIcon { font-size:15px; display:block; margin-bottom:3px; color:#A98D77; }
+  .quizOpt {
+    display:block; width:100%; font-family:inherit; text-align:left; cursor:pointer;
+    background:#FFFDF6; border:3px solid #E4C3A6; border-radius:18px;
+    padding:12px 18px; margin:8px 0; font-size:clamp(15px,2.6vh,19px); color:#6B564C;
+    box-shadow:0 3px 0 rgba(210,172,140,.3);
+  }
+  .quizOpt:active { transform:translateY(2px); box-shadow:none; }
+  .quizOpt.right { background:#E2F7E9; border-color:#8FCBA8; color:#3E8A62; }
+  .quizOpt.wrong { background:#FFE9E4; border-color:#EFB0A0; color:#C06A52; }
+
+  /* 숨은열 스위치 */
+  .lhSwitch { display:flex; align-items:center; gap:10px; }
+  .lhSwitch .swLab { font-size:16px; color:#8A6A52; }
+  .swTrack { width:92px; height:46px; border-radius:26px; background:#D8DEE8; border:3px solid #B8C4D4;
+    position:relative; transition:background .25s, border-color .25s; cursor:pointer; flex:none; }
+  .swTrack.on { background:#FFD9A0; border-color:#F0B060; }
+  .swKnob { position:absolute; top:3px; left:4px; width:34px; height:34px; border-radius:50%;
+    background:#FFF; box-shadow:0 2px 4px rgba(80,60,40,.25); transition:left .25s;
+    display:flex; align-items:center; justify-content:center; font-size:17px; }
+  .swTrack.on .swKnob { left:48px; }
+  .swState { font-size:18px; min-width:96px; }
+  .swState.off { color:#7A8AA8; }
+  .swState.onn { color:#E08A3C; }
+
+  /* ============ 스탬프 수첩 ============ */
+  .sbRow { display:flex; align-items:center; gap:10px; margin:7px 0; }
+  .sbName { width:150px; text-align:right; font-size:15px; color:#8A6A52; flex:none; }
+  .sbSlots { display:flex; gap:9px; }
+  .sbSlot { width:52px; height:52px; border-radius:50%; border:2.5px dashed #D8C4AC; background:#FFFDF6;
+    display:flex; align-items:center; justify-content:center; }
+  .sbSlot.got { border:3px solid #F0B497; background:#FFF0E4; animation:stampIn .35s ease; }
+  .sbSlot svg { width:36px; height:36px; }
+  @keyframes stampIn { 0%{transform:scale(1.6) rotate(-14deg); opacity:0} 100%{transform:scale(1) rotate(0); opacity:1} }
+  .sbBadge { font-size:12.5px; background:#FFF3D6; border:2px solid #EFD48E; color:#B08A2E;
+    border-radius:12px; padding:2px 9px; margin-left:4px; }
+  .titleChip { display:inline-block; font-size:14.5px; background:#F3EAFF; border:2.5px solid #CBAEE8; color:#8A5FB8;
+    border-radius:14px; padding:3px 13px; margin:3px; }
+
+  /* ============ 도감 ============ */
+  .dexGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-top:10px; }
+  .dexCard { background:#FFFDF6; border:3px solid #EAD6BC; border-radius:22px; padding:10px 8px 12px; position:relative; }
+  .dexCard.lockd { opacity:.75; }
+  .dexCard .dxImg { width:84px; height:84px; margin:0 auto; }
+  .dexCard .dxImg svg { width:100%; height:100%; }
+  .dexCard.lockd .dxImg { filter:grayscale(1) brightness(1.05) contrast(.35); opacity:.6; }
+  .dexCard h4 { font-size:16px; color:#7A5C42; margin-top:2px; }
+  .dexCard .dxLike { font-size:12.5px; color:#B49A85; margin-top:2px; }
+  .dexCard .dxCpt { font-size:13px; color:#57729B; line-height:1.45; margin-top:6px;
+    background:#F2F7FF; border-radius:12px; padding:6px 8px; text-align:left; font-family:'Gowun Dodum',sans-serif; }
+  .dexCard .dxSecret { font-size:12.5px; color:#B0703F; line-height:1.45; margin-top:5px;
+    background:#FFF6DE; border-radius:12px; padding:6px 8px; text-align:left; font-family:'Gowun Dodum',sans-serif; }
+  .dexCard .dxHearts { margin-top:4px; }
+  .dexCard .dxHearts svg { width:15px; height:14px; }
+  .panel.gold { border-color:#E8C25A; box-shadow:0 0 0 4px rgba(240,206,100,.35), 0 6px 0 rgba(206,166,80,.4); }
+  .panel.gold h2 { color:#C09030; }
+
+  /* 공식 힌트 카드 (뭉게가 들고 있음) */
+  .formulaCard {
+    position:absolute; z-index:20; pointer-events:none; text-align:center;
+    background:#FFFDF0; border:3px solid #F0DCA0; border-radius:18px; padding:8px 16px;
+    box-shadow:0 4px 0 rgba(216,190,120,.3); font-size:21px; color:#8A6E2E;
+  }
+  .formulaCard small { display:block; font-size:12.5px; color:#BCA25E; }
+
+  /* 세로 화면 경고 */
+  #rotate {
+    position:fixed; inset:0; z-index:999; display:none; flex-direction:column; gap:14px;
+    align-items:center; justify-content:center; background:#FFF3E2; text-align:center;
+  }
+  #rotate .ph { font-size:64px; animation:rotAni 1.6s ease-in-out infinite; }
+  @keyframes rotAni { 0%,20%{transform:rotate(0)} 60%,100%{transform:rotate(90deg)} }
+  #rotate p { font-size:22px; color:#8A6A52; }
+  @media (orientation: portrait) { #rotate { display:flex; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="scene"></div>
+  <canvas id="fx"></canvas>
+  <div id="grain"></div>
+
+  <div id="hud">
+    <div id="hudLeft">
+      <button class="hudBtn" id="stampBtn" title="스탬프 수첩"></button>
+      <button class="hudBtn" id="dexBtn" title="동물 도감"></button>
+    </div>
+    <div id="stageHead" class="hudCard">
+      <div id="shFace"></div>
+      <div id="shName"></div>
+      <div id="shHearts"></div>
+      <div id="shDots"></div>
+    </div>
+    <div id="hudRight">
+      <button class="hudBtn" id="hintBtn" title="뭉게의 힌트"></button>
+      <button class="hudBtn" id="muteBtn" title="소리 켜기/끄기">🔊</button>
+    </div>
+    <div id="meters" class="hudCard">
+      <div class="meter" id="mAlt"><div class="lab">고도</div><div class="val">0.00<small> km</small></div></div>
+      <div class="meter" id="mT"><div class="lab">기온</div><div class="val">-<small> ℃</small></div></div>
+      <div class="meter" id="mTd"><div class="lab">이슬점</div><div class="val">-<small> ℃</small></div></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="praise"></div>
+
+  <div id="dialogWrap">
+    <div id="dialogBox">
+      <div id="dName">뭉게</div>
+      <div id="dFace"></div>
+      <div id="dText"></div>
+      <div id="dNext">▼ 탭</div>
+    </div>
+  </div>
+
+  <div id="overlay"></div>
+</div>
+
+<div id="rotate">
+  <div class="ph">📱</div>
+  <p>태블릿을 <b>가로로</b> 돌려 주세요!<br>모구모구 하늘마을은 가로 화면 전용이에요.</p>
+</div>
+<script>
+'use strict';
+/* ============================================================
+   「모구모구 하늘마을」 — 대기 안정도와 강수 스테이지 클리어형 미니게임
+   (뭉게 유니버스 3부작 · 「뭉게의 하늘 여행」 자매작)
+   ------------------------------------------------------------
+   ★ 교사용 난이도 조정: 아래 TUNING 객체의 숫자만 바꾸면 됩니다.
+   ★ 과학 수치(감률·응결 고도 공식)는 PHYSICS 블록에 있으며
+     교과서 값이므로 변경하지 마세요. (tests/village.test.mjs 가 검증)
+   ★ 저장: 세션 내 메모리만 사용 — localStorage 등 브라우저 저장소 미사용
+   ============================================================ */
+const TUNING = {
+  aff: { win: 1, perfect: 1, fail: 0.5, max: 5 },  // 호감도: 성공 +1 / 노미스 보너스 +1 / 실패 -0.5
+  holdSec: 1.2,             // 목표 상태 유지 성공 판정 시간(초) — S1
+  praiseCombo: 2,           // 이 콤보부터 칭찬 팝업
+  hintAfterFails: 2,        // 연속 실패 몇 번이면 힌트 배지 등장
+
+  s1: { T0: 30, Td0: 8, maxKm: 2.5,
+        rounds: [
+          { label: '<b>20 ℃ 이하</b>의 시원한 공기', type: 'le',   target: 20 },
+          { label: '더 시원하게! <b>15 ℃ 이하</b>',   type: 'le',   target: 15 },
+          { label: '따끈하게 <b>25 ℃</b> (±1 ℃)',    type: 'band', target: 25, tol: 1, startAlt: 2.0 },
+        ] },
+  s2: { T0: 20, Td0: 12, maxKm: 3.2, checkKm: 3.0 },
+  s3: { T:  { min: 10, max: 34, init: 22 },
+        Td: { min: -6, max: 30, init: 10 },
+        tolKm: 0.1, targets: [1.0, 2.0, 1.5], maxKm: 3.2 },
+  s4: { T:  { min: 12, max: 30, init: 20 },
+        Td: { min: 0,  max: 29, init: 14 },
+        mtn: { min: 1, max: 3, step: 0.5, init: 2 },
+        o1Target: 26, o1Tol: 0.5,     // 주문1: 도착 온도 26±0.5℃
+        o3Mtn: 3, o3Gap: 1 },         // 주문3: 산 3km + (T-Td) ≤ 1
+  s5: { T0: 30, Td0: 22, topKm: 3.2,
+        pokeKm: 0.5, pushKm: 2.0,     // 쿡 찔러보기 / 세게 밀어올리기 도달 고도
+        buoyK: 0.4, damp: 0.988,      // 부력 가속 계수, 감쇠
+        pools: { stable: [3.2, 4.0, 4.6], conditional: [5.6, 6.8, 8.0, 9.4], unstable: [10.6, 11.3, 12.0] } },
+  s6: { pushKm: 3.0, tolKm: 0.1, targetKm: 2.0,
+        T:  { min: 16, max: 34, init: 26 },
+        Td: { min: 0,  max: 30, init: 16 },
+        g:  { min: 3,  max: 12, init: 7 } },
+
+  fx: { maxParticles: 260, confettiN: 80 },  // 성능: 파티클 개수 상한
+};
+
+/* ============================================================
+   PHYSICS — 순수 계산 함수 (교과서 값. tests/village.test.mjs 가 검증)
+   ============================================================ */
+// ==PHYSICS-START==
+const RATE = {
+  DRY: 10,   // 건조 단열 감률 ℃/km (불포화 공기: 상승 -10, 하강 +10)
+  DEW: 2,    // 불포화 공기 이슬점 감률 ℃/km
+  WET: 5,    // 습윤 단열 감률 ℃/km (포화 공기: 기온·이슬점 모두)
+};
+// 상승 응결 고도 H(km) = ⅛(T - Td)
+function lclHeight(T, Td) { return (T - Td) / 8; }
+// 지표 (T0, Td0)의 공기가 h(km)까지 '상승'했을 때의 상태
+function riseState(T0, Td0, h) {
+  const H = lclHeight(T0, Td0);
+  if (h < H) {
+    return { T: T0 - RATE.DRY * h, Td: Td0 - RATE.DEW * h, saturated: false, H };
+  }
+  const Tc = T0 - RATE.DRY * H;            // 응결 고도의 기온(=이슬점)
+  const v = Tc - RATE.WET * (h - H);       // 그 위로는 습윤 단열
+  return { T: v, Td: v, saturated: true, H };
+}
+// 가상 세계: 숨은열 스위치 OFF — 응결해도 열이 안 나와 계속 -10℃/km
+function riseStateNoLatent(T0, Td0, h) {
+  const H = lclHeight(T0, Td0);
+  const T = T0 - RATE.DRY * h;
+  return { T, Td: h < H ? Td0 - RATE.DEW * h : T, saturated: h >= H, H };
+}
+// 산꼭대기(hTop, 기온 Ttop, 이슬점 TdTop)에서 h(km)까지 '하강'(불포화)한 상태
+function descendFrom(Ttop, TdTop, hTop, h) {
+  const dh = hTop - h;
+  return { T: Ttop + RATE.DRY * dh, Td: TdTop + RATE.DEW * dh, saturated: false };
+}
+// 푄: (T0, Td0) 공기가 높이 hTop 산을 넘어 반대쪽 지표(0km)에 도착한 상태
+function foehn(T0, Td0, hTop) {
+  const H = lclHeight(T0, Td0);
+  if (H >= hTop) {   // 응결 없이 넘음 → 오르며 식은 만큼 그대로 데워져 도착 = 출발
+    return { H, condensed: false, topT: T0 - RATE.DRY * hTop, topTd: Td0 - RATE.DEW * hTop,
+             arriveT: T0, arriveTd: Td0 };
+  }
+  const top = riseState(T0, Td0, hTop);
+  const dn = descendFrom(top.T, top.Td, hTop, 0);
+  return { H, condensed: true, topT: top.T, topTd: top.Td, arriveT: dn.T, arriveTd: dn.Td };
+}
+// 환경 기온 감률 γ(℃/km)에 따른 대기 안정도
+function stability(gamma) {
+  if (gamma < RATE.WET) return 'stable';        // γ < 5 절대 안정
+  if (gamma > RATE.DRY) return 'unstable';      // γ > 10 절대 불안정
+  return 'conditional';                          // 5~10 조건부 불안정
+}
+// 지표 기온 T0, 감률 γ일 때 고도 h의 환경(주위) 기온
+function envTemp(T0, gamma, h) { return T0 - gamma * h; }
+// 강제 상승한 공기 덩어리가 고도 h에서 주위보다 따뜻한가? (따뜻하면 스스로 상승)
+function parcelWarmer(T0, Td0, gamma, h) {
+  return riseState(T0, Td0, h).T > envTemp(T0, gamma, h);
+}
+// 공기 덩어리를 pushTop까지 강제 상승시켰을 때 생기는 구름의 형태
+// 'none' = 응결 고도 미달 / 'stratus' = 응결 후 복귀(층운형) / 'cumulus' = 자유 상승(적운형)
+function cloudForm(T0, Td0, gamma, pushTop) {
+  const H = lclHeight(T0, Td0);
+  if (pushTop < H) return 'none';
+  return parcelWarmer(T0, Td0, gamma, pushTop) ? 'cumulus' : 'stratus';
+}
+// ==PHYSICS-END==
+
+/* ============================================================
+   유틸
+   ============================================================ */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const fmt1 = v => (Math.round(v * 10) / 10).toFixed(1);
+const fmt2 = v => (Math.round(v * 100) / 100).toFixed(2);
+const TAU = Math.PI * 2;
+const $ = id => document.getElementById(id);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// 손그림 느낌 blob 경로 (SVG path d 문자열)
+function blobD(cx, cy, r, seed, amp = 0.1, pts = 9, ry = 1) {
+  const n = [];
+  for (let i = 0; i < pts; i++) {
+    const a = (i / pts) * TAU;
+    const w = 1 + amp * Math.sin(seed * 3.1 + i * 2.7);
+    n.push([cx + Math.cos(a) * r * w, cy + Math.sin(a) * r * w * ry]);
+  }
+  const mid = (p, q) => `${((p[0] + q[0]) / 2).toFixed(1)} ${((p[1] + q[1]) / 2).toFixed(1)}`;
+  let d = `M${mid(n[0], n[1])}`;
+  for (let i = 1; i <= pts; i++) {
+    const p = n[i % pts], nx = n[(i + 1) % pts];
+    d += `Q${p[0].toFixed(1)} ${p[1].toFixed(1)} ${mid(p, nx)}`;
+  }
+  return d + 'Z';
+}
+// 포인터 이벤트 → SVG 좌표 변환
+function svgPt(svg, e) {
+  const p = svg.createSVGPoint();
+  p.x = e.clientX; p.y = e.clientY;
+  const m = svg.getScreenCTM();
+  return m ? p.matrixTransform(m.inverse()) : { x: 0, y: 0 };
+}
+
+/* ============================================================
+   사운드 — Web Audio API 로 전부 생성 (음원 파일 없음)
+   ============================================================ */
+const AudioSys = {
+  ctx: null, master: null, muted: false,
+  bgmName: null, bgmTimer: null, nextBeat: 0, beatIdx: 0, beatSec: 0.6,
+
+  ensure() {
+    if (!this.ctx) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.muted ? 0 : 0.85;
+        this.master.connect(this.ctx.destination);
+      } catch (e) { this.ctx = null; }
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  now() { return this.ctx ? this.ctx.currentTime : performance.now() / 1000; },
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.85, this.now(), 0.05);
+  },
+  tone(f, t0, dur, { type = 'sine', g = 0.15, f2 = null, attack = 0.01 } = {}) {
+    if (!this.ctx) return;
+    const o = this.ctx.createOscillator(), gn = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    gn.gain.setValueAtTime(0.0001, t0);
+    gn.gain.linearRampToValueAtTime(g, t0 + attack);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(gn); gn.connect(this.master);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  },
+  // 오르골(뮤직박스) 음색: 기본음 + 옥타브 + 살짝 어긋난 배음, 짧은 어택·긴 여운
+  box(f, t0, dur = 1.15, g = 0.085) {
+    this.tone(f, t0, dur, { g, attack: 0.004 });
+    this.tone(f * 2, t0, dur * 0.62, { g: g * 0.28, attack: 0.004 });
+    this.tone(f * 5.04, t0, 0.16, { g: g * 0.05, attack: 0.002 });
+  },
+  noiseBuf: null,
+  noise(t0, dur, g = 0.1, hp = 3000) {
+    if (!this.ctx) return;
+    if (!this.noiseBuf) {
+      const b = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.5, this.ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this.noiseBuf = b;
+    }
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+    const f = this.ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
+    const gn = this.ctx.createGain();
+    gn.gain.setValueAtTime(g, t0);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(f); f.connect(gn); gn.connect(this.master);
+    src.start(t0); src.stop(t0 + dur + 0.05);
+  },
+
+  /* --- 효과음 --- */
+  sTick()    { this.tone(1250, this.now(), 0.03, { type: 'square', g: 0.02 }); },
+  sPop()     { this.tone(520, this.now(), 0.1, { type: 'triangle', g: 0.12, f2: 780 }); },
+  sSparkle() { const t = this.now(); this.tone(880, t, 0.12, { g: 0.09 }); this.tone(1320, t + 0.07, 0.18, { g: 0.08 }); this.tone(1760, t + 0.14, 0.25, { g: 0.06 }); },
+  sHeart()   { const t = this.now(); this.tone(660, t, 0.09, { type: 'triangle', g: 0.11, f2: 990 }); this.tone(1320, t + 0.08, 0.16, { g: 0.07 }); },
+  sHeartDown(){ this.tone(392, this.now(), 0.22, { type: 'triangle', g: 0.09, f2: 294 }); },
+  sMiss()    { const t = this.now(); this.tone(330, t, 0.16, { type: 'triangle', g: 0.08, f2: 262 }); this.tone(262, t + 0.15, 0.2, { type: 'triangle', g: 0.07, f2: 220 }); },
+  sStamp()   { const t = this.now(); this.tone(150, t, 0.16, { type: 'sine', g: 0.26, f2: 60 }); this.noise(t, 0.09, 0.09, 1200); },
+  sClear()   { const t = this.now(); [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, t + i * 0.1, 0.4, { type: 'triangle', g: 0.11 })); },
+  sFanfare() { const t = this.now();
+    [[523,0],[523,.14],[523,.28],[659,.42],[784,.62],[659,.8],[784,.94],[1047,1.1]].forEach(([f,d]) =>
+      this.tone(f, t + d, 0.38, { type: 'triangle', g: 0.12 }));
+    [262, 330, 392].forEach(f => this.tone(f, t + 1.1, 0.9, { g: 0.06, attack: 0.05 })); },
+  sCondense(){ const t = this.now(); [523, 659, 784, 1047].forEach((f, i) => this.tone(f, t + i * 0.09, 0.35, { g: 0.09 })); this.noise(t, 0.5, 0.025, 6000); },
+  sWhoosh()  { this.noise(this.now(), 0.4, 0.05, 1500); },
+  sBell()    { const t = this.now(); this.box(1047, t, 0.9, 0.1); this.box(1319, t + 0.12, 0.9, 0.08); },
+  sWrong()   { this.tone(196, this.now(), 0.3, { type: 'sawtooth', g: 0.05, f2: 147 }); },
+  sRain()    { this.noise(this.now(), 0.6, 0.03, 4500); },
+
+  /* --- BGM 패턴 (b: 박 번호, t: 예약 시각) --- */
+  PATTERNS: {
+    // 마을 지도: 몽글몽글 오르골
+    village: { bpm: 150, mel: [659,784,880,1047, 880,784,659,523, 587,659,784,659, 523,0,880,0,
+                               659,784,880,1047, 1175,1047,880,784, 880,784,659,587, 523,0,0,0],
+      fn(b, t, A) {
+        const m = this.mel[b % this.mel.length];
+        if (m) A.box(m, t, 1.1, 0.06);
+        if (b % 8 === 0) A.box(262, t, 1.8, 0.045);
+        if (b % 8 === 4) A.box(196, t, 1.8, 0.04);
+      } },
+    // 월드1: 가벼운 아르페지오 변주
+    w1: { bpm: 96, fn(b, t, A) {
+        const seq = [523, 659, 784, 880, 784, 659];
+        A.tone(seq[b % 6], t, 0.5, { type: 'triangle', g: 0.045 });
+        if (b % 4 === 0) A.tone(131, t, 1.8, { g: 0.05, attack: 0.4 });
+      } },
+    // 월드2: 산·구름 — 조금 넓은 화음 + 종소리
+    w2: { bpm: 84, fn(b, t, A) {
+        if (b % 4 === 0) { const root = (b % 8 === 0) ? 174.6 : 196;
+          A.tone(root, t, 2.6, { g: 0.05, attack: 0.5 }); A.tone(root * 1.5, t, 2.6, { g: 0.032, attack: 0.5 }); }
+        if (b % 2 === 1) A.box(1047, t, 0.6, 0.03);
+      } },
+    // 월드3: 지혜로운 하늘 — 낮은 오르골
+    w3: { bpm: 66, mel: [523, 0, 659, 587, 523, 0, 440, 0],
+      fn(b, t, A) {
+        const m = this.mel[b % 8];
+        if (m) A.box(m, t, 1.4, 0.055);
+        if (b % 4 === 0) A.tone(165, t, 3.2, { g: 0.04, attack: 0.7 });
+      } },
+    // 잔치: 통통 튀는 파티
+    party: { bpm: 120, fn(b, t, A) {
+        if (b % 2 === 0) A.tone([131, 165, 147, 196][Math.floor(b / 2) % 4], t, 0.35, { type: 'triangle', g: 0.08 });
+        A.noise(t + 0.5 * (60 / this.bpm), 0.04, 0.02, 8000);
+        const mel = [784, 0, 880, 1047, 0, 880, 784, 659];
+        const m = mel[b % 8]; if (m) A.tone(m, t, 0.3, { type: 'triangle', g: 0.055 });
+      } },
+  },
+  startBgm(name) {
+    if (this.bgmName === name) return;
+    this.stopBgm();
+    if (!this.ctx) return;
+    const p = this.PATTERNS[name]; if (!p) return;
+    this.bgmName = name;
+    this.beatSec = 60 / p.bpm;
+    this.beatIdx = 0;
+    this.nextBeat = this.now() + 0.12;
+    this.bgmTimer = setInterval(() => {
+      const ahead = this.now() + 0.3;
+      while (this.nextBeat < ahead) {
+        p.fn.call(p, this.beatIdx, this.nextBeat, this);
+        this.beatIdx++; this.nextBeat += this.beatSec;
+      }
+    }, 60);
+  },
+  stopBgm() {
+    if (this.bgmTimer) { clearInterval(this.bgmTimer); this.bgmTimer = null; }
+    this.bgmName = null;
+  },
+};
+</script>
+<script>
+'use strict';
+/* ============================================================
+   동물 친구 데이터 — 도감이 곧 개념 정리 노트
+   ============================================================ */
+const ANIMALS = [
+  { id: 'chorong',  name: '이슬토끼 초롱이', species: '토끼',   world: 0,
+    tag: '#FDDCE4', tagLine: '#EFAEC0', ink: '#B25476',
+    like: '갓 뽑은 아침 당근, 시원한 바람',
+    concept: '공기는 올라가면 부풀며 스스로 식고(−10 ℃/km), 내려오면 눌리며 데워져요(+10 ℃/km). 열을 주고받지 않아도!',
+    secret: '높은 산에 과자봉지를 들고 가면 빵빵하게 부풀어~ 기압이 낮아져 공기가 팽창하는 거야. 팽창한 공기는 그만큼 시원해진대!' },
+  { id: 'gasirong', name: '고슴도치 가시롱', species: '고슴도치', world: 0,
+    tag: '#F5D9B8', tagLine: '#DBAE78', ink: '#9A6B34',
+    like: '바스락 낙엽 이불, 포근한 낮잠',
+    concept: '수증기가 응결할 때 숨은열(응결열)을 내놓아요. 그래서 구름 속(포화 공기)에서는 천천히, −5 ℃/km로 식어요.',
+    secret: '물 1 g이 응결하면 약 2,500 J의 숨은열이 나와. 태풍이 그렇게 힘이 센 것도 어마어마한 숨은열 덕분이라구!' },
+  { id: 'mongsil',  name: '구름냥 몽실이',   species: '고양이', world: 1,
+    tag: '#E6DCF7', tagLine: '#C0AEE0', ink: '#7C63B0',
+    like: '폭신한 구름 침대, 낮잠, 또 낮잠',
+    concept: '구름이 생기기 시작하는 높이는 상승 응결 고도! H = ⅛ × (T − Td). 기온과 이슬점의 차이가 클수록 높아요.',
+    secret: '비행기에서 보면 구름 바닥이 칼로 자른 듯 평평해~ 그 높이가 바로 그날의 응결 고도이기 때문이야. 냐하.' },
+  { id: 'dotori',   name: '다람쥐 도토리',   species: '다람쥐', world: 1,
+    tag: '#FBDBB4', tagLine: '#E8B478', ink: '#B0703F',
+    like: '반짝반짝 닦은 배달 가방, 도토리 저금',
+    concept: '산을 넘은 바람은 넘기 전보다 뜨겁고 건조해져요(푄). 오를 땐 −5 ℃/km로 천천히 식고, 내려올 땐 +10 ℃/km로 데워지니까!',
+    secret: '늦봄 태백산맥을 넘어 영서 지방으로 부는 높새바람이 바로 푄이야. 어찌나 덥고 건조한지 농작물이 바싹 마를 정도라구!' },
+  { id: 'baksa',    name: '부엉이 박사',     species: '부엉이', world: 2,
+    tag: '#D6E4F2', tagLine: '#A4C0DC', ink: '#4E6E9C',
+    like: '깃펜, 밤하늘 관측 일지, 수수께끼',
+    concept: '공기 덩어리가 같은 높이의 주위보다 따뜻하면 스스로 상승! γ<5 절대 안정 · 5~10 조건부 불안정 · γ>10 절대 불안정.',
+    secret: '맑은 여름날 오후에 갑자기 쏟아지는 소나기는, 낮 동안 뜨거워진 지표가 γ를 키워 하늘이 불안정해진 탓이란다. 홋홋.' },
+  { id: 'mungmung', name: '곰돌이 뭉뭉이',   species: '곰',     world: 2,
+    tag: '#F7E3C0', tagLine: '#DEB884', ink: '#A07838',
+    like: '마을 잔치, 꿀케이크, 파티 모자',
+    concept: '안정한 하늘 + 강제 상승 = 얇고 옆으로 넓은 층운형. 불안정한 하늘 = 두껍고 위로 크는 적운형 구름!',
+    secret: '소나기와 번개를 몰고 오는 적란운은 키가 10 km를 넘기도 해! 하늘의 마천루 같은 녀석이지. 잔치엔 사양이야~' },
+];
+const CHAR_TAG = {
+  mungge: { name: '뭉게', tag: '#FBD3AE', tagLine: '#E8B488', ink: '#8A5F3E' },
+};
+const animalById = id => ANIMALS.find(a => a.id === id);
+
+/* ============================================================
+   캐릭터 SVG — 전부 코드로 직접 그림 (외부 이미지 없음)
+   ============================================================ */
+const INK = '#5B4A44';
+function facePartsSVG(face, opt = {}) {
+  const eyeDot = `<circle cx="-13" cy="-6" r="3.6" fill="${INK}"/><circle cx="13" cy="-6" r="3.6" fill="${INK}"/>
+    <circle cx="-11.6" cy="-7.6" r="1.3" fill="#FFF"/><circle cx="14.4" cy="-7.6" r="1.3" fill="#FFF"/>`;
+  const eyeArc = `<path d="M-18 -4 q5 -7 10 0 M8 -4 q5 -7 10 0" stroke="${INK}" stroke-width="2.9" fill="none" stroke-linecap="round"/>`;
+  const eyeClosed = `<path d="M-18 -6 q5 6 10 0 M8 -6 q5 6 10 0" stroke="${INK}" stroke-width="2.9" fill="none" stroke-linecap="round"/>`;
+  const spark = cx => `<path d="M${cx} -13 L${cx + 2.6} -7.4 L${cx + 8.4} -5.6 L${cx + 2.6} -3.8 L${cx} 1.6 L${cx - 2.6} -3.8 L${cx - 8.4} -5.6 L${cx - 2.6} -7.4 Z" fill="#F7C154" stroke="#E8A03C" stroke-width="1"/>`;
+  const M = {
+    smile: `<path d="M-6 9 Q0 14 6 9" stroke="${INK}" stroke-width="2.7" fill="none" stroke-linecap="round"/>`,
+    grin:  `<path d="M-8 7 Q0 17 8 7 Q0 11 -8 7 Z" fill="#8A5B50" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/>`,
+    o:     `<ellipse cx="0" cy="10" rx="3.6" ry="4.2" fill="#8A5B50"/>`,
+    wavy:  `<path d="M-7 11 Q-3.5 8 0 11 Q3.5 14 7 11" stroke="${INK}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+    pant:  `<ellipse cx="0" cy="11" rx="5" ry="5.6" fill="#8A5B50"/><ellipse cx="0" cy="13.4" rx="3" ry="2.4" fill="#F09A9A"/>`,
+  };
+  const F = {
+    normal:  { e: eyeDot,               m: M.smile },
+    happy:   { e: eyeArc,               m: M.grin },
+    wow:     { e: spark(-13) + spark(13), m: M.o,
+               x: `<text x="-42" y="-26" font-size="13" fill="#F5C86E">✦</text><text x="30" y="-30" font-size="13" fill="#F5C86E">✦</text>` },
+    puzzled: { e: eyeDot, m: M.wavy,
+               x: `<path d="M6 -17 q6 -5 12 -2" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                   <text x="24" y="-28" font-size="20" fill="#B48EC8" font-family="Jua">?</text>` },
+    sleep:   { e: eyeClosed, m: M.o,
+               x: `<text x="26" y="-24" font-size="15" fill="#9FB8D8" font-family="Jua">z</text><text x="35" y="-34" font-size="12" fill="#B8CCE4" font-family="Jua">z</text>` },
+    proud:   { e: eyeArc, m: M.smile,
+               x: `<text x="-44" y="-22" font-size="13" fill="#F5C86E">✦</text>` },
+    pant:    { e: eyeClosed, m: M.pant,
+               x: `<path d="M27 -18 q5.5 7 0 11.5 q-5.5 -4.5 0 -11.5 Z" fill="#A8D0F0" stroke="#84B4E0" stroke-width="1.4"/>` },
+  };
+  const f = F[face] || F.normal;
+  const cheek = opt.cheek || '#F9C6C0';
+  return `${f.e}
+    <circle cx="-23" cy="3" r="5" fill="${cheek}" opacity=".85"/>
+    <circle cx="23" cy="3" r="5" fill="${cheek}" opacity=".85"/>
+    ${opt.noMouth ? '' : f.m}${f.x || ''}`;
+}
+
+const CHAR_BODY = {
+  mungge(face) {
+    return `<g transform="scale(1.42)">
+      <path d="M-28 8 Q-32 -12 -14 -18 Q-8 -32 8 -28 Q26 -32 28 -12 Q34 4 22 14 Q12 26 -6 22 Q-24 24 -28 8 Z"
+        fill="#FFFFFF" stroke="#DCE3EE" stroke-width="3" stroke-linejoin="round"/></g>
+      <g>${facePartsSVG(face)}</g>`;
+  },
+  chorong(face, opt) {
+    return `
+      <ellipse cx="-17" cy="-44" rx="9.5" ry="22" transform="rotate(-13 -17 -44)" fill="#FFF6F1" stroke="#EAC3BC" stroke-width="3.2"/>
+      <ellipse cx="-17" cy="-42" rx="4.6" ry="14" transform="rotate(-13 -17 -42)" fill="#F9C6CE"/>
+      <ellipse cx="17" cy="-44" rx="9.5" ry="22" transform="rotate(13 17 -44)" fill="#FFF6F1" stroke="#EAC3BC" stroke-width="3.2"/>
+      <ellipse cx="17" cy="-42" rx="4.6" ry="14" transform="rotate(13 17 -42)" fill="#F9C6CE"/>
+      <path d="${blobD(0, 0, 34, 5)}" fill="#FFF6F1" stroke="#EAC3BC" stroke-width="3.5" stroke-linejoin="round"/>
+      ${facePartsSVG(face, { cheek: '#F9B8C4' })}
+      ${opt.prop ? `<g transform="translate(30,20) rotate(16)">
+        <path d="M0 -2 L7 20 L-5 18 Z" fill="#F79A54" stroke="#E07E38" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M0 -3 q-6 -8 -2 -13 M2 -4 q2 -10 8 -11 M1 -4 q-1 -9 3 -14" stroke="#7CBF6E" stroke-width="2.6" fill="none" stroke-linecap="round"/></g>` : ''}`;
+  },
+  gasirong(face, opt) {
+    let sp = '';
+    for (let i = 0; i < 8; i++) {
+      const th = (163 - i * 19.7) * Math.PI / 180;
+      const c = Math.cos(th), s = -Math.sin(th);
+      const bx = c * 22, by = s * 22 - 5, tx = c * 47, ty = s * 47 - 5;
+      const px = -s * 8.6, py = c * 8.6;
+      sp += `<path d="M${(bx + px).toFixed(1)} ${(by + py).toFixed(1)} L${tx.toFixed(1)} ${ty.toFixed(1)} L${(bx - px).toFixed(1)} ${(by - py).toFixed(1)} Z"
+        fill="#C99A6E" stroke="#A87848" stroke-width="3" stroke-linejoin="round"/>`;
+    }
+    return `${sp}
+      <path d="${blobD(0, 0, 34, 8)}" fill="#FFF3E2" stroke="#E3C09A" stroke-width="3.5" stroke-linejoin="round"/>
+      ${facePartsSVG(face, { cheek: '#F5C0A8' })}
+      ${opt.prop ? `<g transform="translate(4,-40) rotate(-12)">
+        <path d="M0 0 Q10 -14 24 -10 Q18 4 2 4 Q0 2 0 0 Z" fill="#E8A96B" stroke="#C88848" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M3 2 Q12 -6 21 -8" stroke="#C88848" stroke-width="1.6" fill="none"/></g>` : ''}`;
+  },
+  mongsil(face, opt) {
+    return `
+      <path d="M30 16 q22 5 19 -16" stroke="#CFC4E8" stroke-width="10" fill="none" stroke-linecap="round"/>
+      <path d="M30 16 q22 5 19 -16" stroke="#F6F2FF" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <path d="M-31 -20 L-25 -45 L-8 -31 Z" fill="#F6F2FF" stroke="#CFC4E8" stroke-width="3.4" stroke-linejoin="round"/>
+      <path d="M-25 -26 L-22 -38 L-14 -31 Z" fill="#EFC9DC"/>
+      <path d="M31 -20 L25 -45 L8 -31 Z" fill="#F6F2FF" stroke="#CFC4E8" stroke-width="3.4" stroke-linejoin="round"/>
+      <path d="M25 -26 L22 -38 L14 -31 Z" fill="#EFC9DC"/>
+      <path d="${blobD(0, 0, 34, 11)}" fill="#F6F2FF" stroke="#CFC4E8" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M-38 2 h11 M-38 8 h11 M27 2 h11 M27 8 h11" stroke="#CFC4E8" stroke-width="2" stroke-linecap="round"/>
+      ${facePartsSVG(face, { cheek: '#F0C4D8' })}
+      ${opt.prop ? `<g transform="translate(-30,26) rotate(-8)">
+        <rect x="-16" y="-8" width="32" height="15" rx="7" fill="#EBDFF8" stroke="#CFC4E8" stroke-width="2.5"/>
+        <path d="M-9 -1 h18" stroke="#DCCCF0" stroke-width="2.4" stroke-linecap="round"/></g>` : ''}`;
+  },
+  dotori(face, opt) {
+    return `
+      <path d="M20 12 Q54 10 47 -22 Q44 -42 25 -37 Q41 -24 31 -8 Q26 2 20 12 Z" fill="#E8A265" stroke="#C88448" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M31 -28 Q39 -18 33 -6" stroke="#D8B088" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="-20" cy="-32" r="9" fill="#F7CE9E" stroke="#D8A468" stroke-width="3"/>
+      <circle cx="-20" cy="-32" r="4" fill="#EBAF7A"/>
+      <circle cx="20" cy="-32" r="9" fill="#F7CE9E" stroke="#D8A468" stroke-width="3"/>
+      <circle cx="20" cy="-32" r="4" fill="#EBAF7A"/>
+      <path d="${blobD(0, 0, 34, 3)}" fill="#F7CE9E" stroke="#D8A468" stroke-width="3.5" stroke-linejoin="round"/>
+      ${facePartsSVG(face, { cheek: '#F2B490' })}
+      ${opt.prop ? `<path d="M-26 -16 Q0 4 20 15" stroke="#B08050" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+      <g transform="translate(21,22) rotate(-6)">
+        <rect x="-14" y="-10" width="28" height="21" rx="8" fill="#D9A05C" stroke="#B07E40" stroke-width="2.6"/>
+        <path d="M-14 -2 h28" stroke="#B07E40" stroke-width="2"/>
+        <ellipse cx="0" cy="3" rx="4" ry="4.5" fill="#8A5F32"/><path d="M-4 1 q4 -3 8 0" stroke="#6E4A24" stroke-width="1.8" fill="none"/></g>` : ''}`;
+  },
+  baksa(face, opt) {
+    return `
+      <path d="M-22 -28 L-31 -49 L-9 -36 Z" fill="#DCE7F2" stroke="#A8BCD4" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M22 -28 L31 -49 L9 -36 Z" fill="#DCE7F2" stroke="#A8BCD4" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="${blobD(0, 0, 34, 14)}" fill="#DCE7F2" stroke="#A8BCD4" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M-35 -6 Q-48 6 -36 22 Q-31 10 -32 -2 Z" fill="#C4D4E6" stroke="#A8BCD4" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M35 -6 Q48 6 36 22 Q31 10 32 -2 Z" fill="#C4D4E6" stroke="#A8BCD4" stroke-width="2.6" stroke-linejoin="round"/>
+      <ellipse cx="0" cy="15" rx="19" ry="14" fill="#F2F7FC"/>
+      <path d="M-12 8 q4 4 8 0 M4 8 q4 4 8 0 M-8 16 q4 4 8 0" stroke="#D4E0EC" stroke-width="2" fill="none" stroke-linecap="round"/>
+      ${facePartsSVG(face, { cheek: '#E8B8C4', noMouth: true })}
+      <path d="M-4 2 L4 2 L0 9.5 Z" fill="#F0B060" stroke="#D89040" stroke-width="1.6" stroke-linejoin="round"/>
+      <g stroke="#7A6A9C" stroke-width="2.6" fill="none">
+        <circle cx="-13" cy="-6" r="9.6"/><circle cx="13" cy="-6" r="9.6"/><path d="M-3.4 -6 h6.8"/></g>
+      ${opt.prop ? `<g transform="translate(37,4) rotate(22)">
+        <path d="M0 20 L0 -6" stroke="#8A6A52" stroke-width="2.2"/>
+        <path d="M0 -6 Q-9 -18 -2 -30 Q9 -19 2 -6 Z" fill="#B9CFF0" stroke="#8AA8D8" stroke-width="2.2" stroke-linejoin="round"/></g>` : ''}`;
+  },
+  mungmung(face, opt) {
+    return `
+      <circle cx="-25" cy="-27" r="10.5" fill="#F0CFA0" stroke="#D0A870" stroke-width="3.2"/>
+      <circle cx="-25" cy="-27" r="5" fill="#FAE6C8"/>
+      <circle cx="25" cy="-27" r="10.5" fill="#F0CFA0" stroke="#D0A870" stroke-width="3.2"/>
+      <circle cx="25" cy="-27" r="5" fill="#FAE6C8"/>
+      <path d="${blobD(0, 0, 35, 17)}" fill="#F0CFA0" stroke="#D0A870" stroke-width="3.5" stroke-linejoin="round"/>
+      <ellipse cx="0" cy="10" rx="13.5" ry="10.5" fill="#FAE9CE"/>
+      ${facePartsSVG(face, { cheek: '#F0B49A', noMouth: true })}
+      <ellipse cx="0" cy="5.5" rx="4.4" ry="3.4" fill="#8A6248"/>
+      <path d="M0 8.5 v3.5 M0 12 q-4.5 4.5 -8 1 M0 12 q4.5 4.5 8 1" stroke="${INK}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      ${opt.prop ? `<g transform="translate(15,-42) rotate(13)">
+        <path d="M0 -20 L12.5 8 L-12.5 8 Z" fill="#A8DEC8" stroke="#7EC4A4" stroke-width="2.6" stroke-linejoin="round"/>
+        <path d="M-8.5 -1 q8.5 6 17 0" stroke="#F8B8C8" stroke-width="3" fill="none"/>
+        <circle cx="0" cy="-21" r="4.5" fill="#F8B8C8" stroke="#E896AC" stroke-width="2"/></g>` : ''}`;
+  },
+};
+function charSVG(id, face = 'normal', opt = {}) {
+  const o = Object.assign({ prop: true }, opt);
+  const body = (CHAR_BODY[id] || CHAR_BODY.mungge)(face, o);
+  return `<svg viewBox="-62 -66 124 132" ${o.cls ? `class="${o.cls}"` : ''} ${o.attrs || ''}>${body}</svg>`;
+}
+
+/* ---- 작은 아이콘들 ---- */
+function pawSVG(c = '#E8987A') {
+  return `<svg viewBox="0 0 40 40"><ellipse cx="20" cy="26.5" rx="10" ry="8" fill="${c}"/>
+    <circle cx="7.5" cy="17" r="4.4" fill="${c}"/><circle cx="15" cy="10.5" r="4.7" fill="${c}"/>
+    <circle cx="25" cy="10.5" r="4.7" fill="${c}"/><circle cx="32.5" cy="17" r="4.4" fill="${c}"/></svg>`;
+}
+function bookSVG() {
+  return `<svg viewBox="0 0 40 40"><path d="M6 8 Q13 5 20 9 Q27 5 34 8 L34 31 Q27 28 20 32 Q13 28 6 31 Z"
+    fill="#FBE3C0" stroke="#D8A468" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M20 9 V32" stroke="#D8A468" stroke-width="2"/>
+    <path d="M10 14 q5 -2 7 0 M10 19 q5 -2 7 0 M23 14 q5 -2 7 0 M23 19 q5 -2 7 0" stroke="#E0B888" stroke-width="1.8" fill="none"/></svg>`;
+}
+// 호감도 하트 (반 칸 지원)
+function heartSVG(fill) { // fill: 0 | 0.5 | 1
+  const path = 'M12 20 C5 14 1.5 10.5 1.5 6.8 1.5 3.9 3.8 1.8 6.5 1.8 8.7 1.8 10.8 3.2 12 5.2 13.2 3.2 15.3 1.8 17.5 1.8 20.2 1.8 22.5 3.9 22.5 6.8 22.5 10.5 19 14 12 20Z';
+  let inner = `<path d="${path}" fill="#EEE0D2" stroke="#D8C4B0" stroke-width="1.6" stroke-linejoin="round"/>`;
+  if (fill >= 1) inner = `<path d="${path}" fill="#F58C8C" stroke="#D96A6A" stroke-width="1.6" stroke-linejoin="round"/>`;
+  else if (fill >= 0.5) inner += `<path d="${path}" fill="#F58C8C" stroke="#D96A6A" stroke-width="1.6" stroke-linejoin="round" style="clip-path:inset(0 50% 0 0)"/>`;
+  return `<svg viewBox="0 0 24 22">${inner}</svg>`;
+}
+function heartsRowHTML(v, max = 5) {
+  let s = '';
+  for (let i = 0; i < max; i++) s += heartSVG(clamp(v - i, 0, 1) >= 1 ? 1 : (v - i >= 0.5 ? 0.5 : 0));
+  return s;
+}
+// 폭신 구름 마크업 (형태: puffs 배열)
+function cloudPuffsSVG(w, h, fill = '#FFFFFF', line = '#DCE3EE') {
+  const n = Math.max(3, Math.round(w / (h * 0.9)));
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const cx = -w / 2 + (i + 0.5) * (w / n);
+    const r = h * (0.55 + 0.28 * Math.sin(i * 2.4 + 1));
+    s += `<circle cx="${cx.toFixed(1)}" cy="0" r="${r.toFixed(1)}"/>`;
+  }
+  return `<g fill="${fill}" stroke="${line}" stroke-width="3">${s}<rect x="${-w / 2}" y="0" width="${w}" height="${h * 0.5}" rx="${h * 0.25}" stroke="none"/></g>`;
+}
+
+/* ============================================================
+   FX 파티클 (캔버스 오버레이) — 개수 제한으로 60fps 유지
+   ============================================================ */
+const FX = {
+  cv: null, ctx: null, parts: [],
+  init() { this.cv = $('fx'); this.ctx = this.cv.getContext('2d'); this.resize(); },
+  resize() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    this.cv.width = Math.round(innerWidth * d); this.cv.height = Math.round(innerHeight * d);
+    this.ctx.setTransform(d, 0, 0, d, 0, 0);
+  },
+  add(p) { if (this.parts.length < TUNING.fx.maxParticles) this.parts.push(p); },
+  COLORS: ['#F8A8B8', '#F7C154', '#9FD6B4', '#A8C8F0', '#CBAEE8', '#F0A97E'],
+  confetti(x = innerWidth / 2, y = innerHeight * 0.3, n = TUNING.fx.confettiN) {
+    for (let i = 0; i < n; i++) this.add({
+      type: 'conf', x: x + (Math.random() - 0.5) * 140, y: y + (Math.random() - 0.5) * 40,
+      vx: (Math.random() - 0.5) * 320, vy: -Math.random() * 300 - 60, g: 520,
+      rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 10,
+      size: 5 + Math.random() * 6, color: pick(this.COLORS), age: 0, life: 1.7 + Math.random() * 0.9,
+    });
+  },
+  burst(x, y, color = '#F7C154', n = 14) {
+    for (let i = 0; i < n; i++) { const a = Math.random() * TAU, sp = 60 + Math.random() * 160;
+      this.add({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 60,
+        size: 3 + Math.random() * 4, color, age: 0, life: 0.6 + Math.random() * 0.5 }); }
+  },
+  hearts(x, y, n = 6) {
+    for (let i = 0; i < n; i++) this.add({ type: 'heart', x: x + (Math.random() - 0.5) * 60, y,
+      vx: (Math.random() - 0.5) * 40, vy: -60 - Math.random() * 70, g: -20,
+      size: 7 + Math.random() * 6, color: '#F58C9C', age: 0, life: 1.1 + Math.random() * 0.5 });
+  },
+  warm(x, y, n = 3) { // 숨은열 온기 입자
+    for (let i = 0; i < n; i++) this.add({ type: 'warm', x: x + (Math.random() - 0.5) * 46, y: y + (Math.random() - 0.5) * 36,
+      vx: (Math.random() - 0.5) * 30, vy: -30 - Math.random() * 40, g: -14,
+      size: 3.5 + Math.random() * 3, color: pick(['#F7A054', '#F58C8C', '#F7C154']), age: 0, life: 0.8 + Math.random() * 0.4 });
+  },
+  firework(x, y) {
+    const col = pick(this.COLORS);
+    for (let i = 0; i < 26; i++) { const a = (i / 26) * TAU, sp = 130 + Math.random() * 110;
+      this.add({ type: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 130,
+        size: 3 + Math.random() * 3, color: col, age: 0, life: 0.9 + Math.random() * 0.5 }); }
+  },
+  tick(dt) {
+    const c = this.ctx;
+    c.clearRect(0, 0, innerWidth, innerHeight);
+    if (!this.parts.length) return;
+    for (let i = this.parts.length - 1; i >= 0; i--) {
+      const p = this.parts[i];
+      p.age += dt;
+      if (p.age >= p.life) { this.parts.splice(i, 1); continue; }
+      p.vy += (p.g || 0) * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.vr) p.rot += p.vr * dt;
+      const k = 1 - p.age / p.life;
+      c.globalAlpha = Math.min(1, k * 2);
+      c.fillStyle = p.color;
+      if (p.type === 'conf') {
+        c.save(); c.translate(p.x, p.y); c.rotate(p.rot);
+        c.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66); c.restore();
+      } else if (p.type === 'spark') {
+        c.save(); c.translate(p.x, p.y); c.rotate(p.age * 3);
+        c.beginPath();
+        c.moveTo(0, -p.size); c.lineTo(p.size * 0.36, 0); c.lineTo(0, p.size); c.lineTo(-p.size * 0.36, 0);
+        c.closePath(); c.fill(); c.restore();
+      } else if (p.type === 'heart') {
+        c.save(); c.translate(p.x, p.y); c.scale(p.size / 12, p.size / 12);
+        c.beginPath();
+        c.moveTo(0, 4); c.bezierCurveTo(-6, -2, -5, -8, 0, -4); c.bezierCurveTo(5, -8, 6, -2, 0, 4);
+        c.fill(); c.restore();
+      } else { // warm
+        c.beginPath(); c.arc(p.x, p.y, p.size * k, 0, TAU); c.fill();
+      }
+    }
+    c.globalAlpha = 1;
+  },
+};
+
+/* ============================================================
+   토스트 · 칭찬 팝업 · 흔들림
+   ============================================================ */
+let toastTimer = null;
+function toast(msg, good = false, ms = 1900) {
+  const el = $('toast');
+  el.innerHTML = msg; el.classList.toggle('good', good); el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+function shake() {
+  const st = $('stage');
+  st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake');
+}
+const PRAISES = ['완벽해!', '대단해!', '천재잖아?!', '짱이야!', '구름도 감동했어!', '반짝반짝 최고!', '하늘이 놀랐어!'];
+function praisePop(combo) {
+  const el = $('praise');
+  el.innerHTML = pick(PRAISES) + (combo >= 2 ? `<span class="comboTag">🔥 ${combo} 콤보!</span>` : '');
+  el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+}
+
+/* ============================================================
+   오버레이
+   ============================================================ */
+function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; o.classList.add('on'); }
+function hideOverlay() { const o = $('overlay'); o.classList.remove('on'); o.innerHTML = ''; }
+
+/* ============================================================
+   대화 시스템 — 말하는 이가 매 줄 바뀔 수 있음
+   line: { who:'mungge'|animalId, face, text }
+   ============================================================ */
+const Dialog = {
+  lines: [], idx: 0, charIdx: 0, typing: false, timer: null, onDone: null,
+  run(lines, onDone) {
+    this.lines = lines; this.idx = 0; this.onDone = onDone;
+    G.dialogActive = true;
+    $('dialogWrap').classList.add('on');
+    this.showLine();
+  },
+  speakerInfo(who) {
+    return animalById(who) || CHAR_TAG[who] || CHAR_TAG.mungge;
+  },
+  showLine() {
+    const L = this.lines[this.idx];
+    const info = this.speakerInfo(L.who || 'mungge');
+    const nameEl = $('dName');
+    nameEl.textContent = info.name;
+    nameEl.style.background = info.tag; nameEl.style.borderColor = info.tagLine; nameEl.style.color = info.ink;
+    $('dFace').innerHTML = charSVG(L.who || 'mungge', L.face || 'normal');
+    const el = $('dText');
+    el.innerHTML = '';
+    this.typing = true; this.charIdx = 0;
+    $('dNext').style.visibility = 'hidden';
+    clearInterval(this.timer);
+    const plain = L.text;
+    this.timer = setInterval(() => {
+      this.charIdx++;
+      const done = this.charIdx >= this.stripLen(plain);
+      el.innerHTML = this.slice(plain, this.charIdx);
+      if (this.charIdx % 2 === 0) AudioSys.sTick();
+      if (done) this.finishLine();
+    }, 32);
+  },
+  stripLen(html) { return html.replace(/<[^>]*>/g, '').length; },
+  slice(html, n) {
+    let out = '', cnt = 0, i = 0;
+    while (i < html.length && cnt < n) {
+      if (html[i] === '<') { const j = html.indexOf('>', i); out += html.slice(i, j + 1); i = j + 1; }
+      else { out += html[i]; i++; cnt++; }
+    }
+    const opens = (out.match(/<b>/g) || []).length - (out.match(/<\/b>/g) || []).length;
+    for (let k = 0; k < opens; k++) out += '</b>';
+    const so = (out.match(/<span[^>]*>/g) || []).length - (out.match(/<\/span>/g) || []).length;
+    for (let k = 0; k < so; k++) out += '</span>';
+    return out;
+  },
+  finishLine() {
+    clearInterval(this.timer);
+    this.typing = false;
+    $('dText').innerHTML = this.lines[this.idx].text;
+    $('dNext').style.visibility = 'visible';
+  },
+  tap() {
+    if (!this.lines.length) return;
+    if (this.typing) { this.finishLine(); return; }
+    this.idx++;
+    if (this.idx < this.lines.length) { AudioSys.sPop(); this.showLine(); }
+    else this.close();
+  },
+  close() {
+    clearInterval(this.timer);
+    $('dialogWrap').classList.remove('on');
+    G.dialogActive = false;
+    this.lines = [];
+    const cb = this.onDone; this.onDone = null;
+    if (cb) cb();
+  },
+  abort() {
+    clearInterval(this.timer);
+    $('dialogWrap').classList.remove('on');
+    G.dialogActive = false;
+    this.lines = []; this.onDone = null;
+  },
+};
+</script>
+<script>
+'use strict';
+/* ============================================================
+   스테이지 메타
+   ============================================================ */
+const STAGES = [
+  { animal: 'chorong',  title: '초롱이의 더위 탈출',       missions: ['20℃ 배달', '15℃ 배달', '25℃ 배달'] },
+  { animal: 'gasirong', title: '가시롱의 비밀 수업',       missions: ['비교 실험', '왜? 퀴즈'] },
+  { animal: 'mongsil',  title: '몽실이의 구름 침대',       missions: ['1.0km 침대', '2.0km 침대', '1.5km 침대'] },
+  { animal: 'dotori',   title: '도토리의 바람 배달',       missions: ['26℃ 주문', '비 없는 배달', '건조 특급'] },
+  { animal: 'baksa',    title: '부엉이 박사의 감정사 시험', missions: ['감정 시험', '설계 시험', '비전 시험'] },
+  { animal: 'mungmung', title: '뭉뭉이의 잔치 준비',       missions: ['층운 카펫', '적운 풍선', '2km 적운'] },
+];
+const WORLDS = ['월드1 · 오르내림의 기술', '월드2 · 구름과 산의 기술', '월드3 · 하늘 읽기의 기술'];
+const TOTAL_STAMPS = STAGES.reduce((s, st) => s + st.missions.length, 0);
+
+/* ============================================================
+   전역 상태 (메모리 전용 — 새로고침하면 초기화, 저장소 사용 안 함)
+   ============================================================ */
+const G = {
+  screen: 'title', dialogActive: false, paused: false,
+  cleared: STAGES.map(() => false),
+  stamps: STAGES.map(st => st.missions.map(() => false)),
+  aff: STAGES.map(() => 0),          // 호감도 0~5 (0.5 단위)
+  noMiss: STAGES.map(() => false),
+  noHint: STAGES.map(() => false),
+  secretShown: STAGES.map(() => false),
+  combo: 0, bestCombo: 0,
+  titles: [],
+  run: null,   // 진행 중 스테이지 런타임 { idx, mIdx, failStreak, failCount, hintUsed, hintLevel, hints }
+  time: 0,
+};
+const stampCount = () => G.stamps.flat().filter(Boolean).length;
+const clearedCount = () => G.cleared.filter(Boolean).length;
+const unlockedCount = () => Math.min(STAGES.length, clearedCount() + 1); // 순차 잠금
+
+/* ============================================================
+   HUD
+   ============================================================ */
+function updateHud() {
+  $('stampBtn').innerHTML = `${pawSVG()}<span class="cnt">${stampCount()}/${TOTAL_STAMPS}</span>`;
+  $('dexBtn').innerHTML = `${bookSVG()}<span class="cnt">${clearedCount()}/6</span>`;
+  $('hintBtn').innerHTML = charSVG('mungge', 'normal');
+}
+function setStageHead(idx) {
+  const head = $('stageHead');
+  if (idx == null) { head.classList.remove('on'); return; }
+  const st = STAGES[idx], a = animalById(st.animal);
+  head.classList.add('on');
+  $('shFace').innerHTML = charSVG(st.animal, 'normal', { prop: false });
+  $('shName').innerHTML = `${a.name}<small>${st.title}</small>`;
+  refreshStageHead();
+}
+function refreshStageHead() {
+  if (!G.run) return;
+  const i = G.run.idx;
+  $('shHearts').innerHTML = heartsRowHTML(G.aff[i]);
+  $('shDots').innerHTML = STAGES[i].missions.map((_, m) =>
+    `<div class="mdot ${G.stamps[i][m] ? 'done' : m === G.run.mIdx ? 'cur' : ''}"></div>`).join('');
+}
+function setMeters(alt, T, Td) {
+  $('meters').classList.add('on');
+  $('mAlt').querySelector('.val').innerHTML = `${fmt2(alt)}<small> km</small>`;
+  $('mT').querySelector('.val').innerHTML = T == null ? '-' : `${fmt1(T)}<small> ℃</small>`;
+  $('mTd').querySelector('.val').innerHTML = Td == null ? '-' : `${fmt1(Td)}<small> ℃</small>`;
+}
+function hideMeters() { $('meters').classList.remove('on'); }
+
+/* ============================================================
+   게이미피케이션 코어 — 호감도 · 스탬프 · 콤보 · 칭호
+   ============================================================ */
+function addAff(i, d) {
+  G.aff[i] = clamp(G.aff[i] + d, 0, TUNING.aff.max);
+  refreshStageHead();
+}
+function grantTitle(name) {
+  if (G.titles.includes(name)) return;
+  G.titles.push(name);
+  setTimeout(() => { toast(`🏅 칭호 획득 — <b>${name}</b>`, true, 2600); AudioSys.sBell(); }, 500);
+}
+// 미션 성공 공통 연출: 스탬프 + 호감도 + 콤보 + 색종이 → (5♥ 비밀 대사) → next()
+function celebrate(stageIdx, mIdx, next, { big = false } = {}) {
+  const st = STAGES[stageIdx], a = animalById(st.animal);
+  const first = !G.stamps[stageIdx][mIdx];
+  G.stamps[stageIdx][mIdx] = true;
+  addAff(stageIdx, TUNING.aff.win);
+  G.combo++;
+  G.bestCombo = Math.max(G.bestCombo, G.combo);
+  if (G.run) { G.run.failStreak = 0; G.run.hintLevel = 0; }
+  updateHud(); refreshStageHead();
+  AudioSys.sStamp();
+  setTimeout(() => AudioSys.sClear(), 120);
+  FX.confetti(innerWidth / 2, innerHeight * 0.32, big ? TUNING.fx.confettiN : 46);
+  FX.hearts(innerWidth / 2, innerHeight * 0.4, 5);
+  if (G.combo >= TUNING.praiseCombo) praisePop(G.combo);
+  if (first) toast(`${pawIcon()} <b>${st.missions[mIdx]}</b> 스탬프 획득!`, true, 1700);
+  $('hintBtn').classList.remove('pulse');
+  const goNext = () => { if (next) next(); };
+  // 호감도 만렙 → 특별 리액션 + 비밀 한마디 해금
+  if (G.aff[stageIdx] >= TUNING.aff.max && !G.secretShown[stageIdx]) {
+    G.secretShown[stageIdx] = true;
+    setTimeout(() => {
+      AudioSys.sSparkle();
+      FX.hearts(innerWidth / 2, innerHeight * 0.5, 12);
+      Dialog.run([
+        { who: a.id, face: 'wow', text: `<b>♥♥♥♥♥ 호감도 최대!</b> 너… 정말 최고의 친구야!` },
+        { who: a.id, face: 'happy', text: `비밀 하나 알려줄게. <span class="kw">${a.secret}</span>` },
+        { who: 'mungge', face: 'happy', text: `우와, ${a.species} 친구의 비밀 이야기까지! 도감에도 기록해 둘게~` },
+      ], goNext);
+    }, 1300);
+  } else {
+    setTimeout(goNext, big ? 1700 : 1300);
+  }
+}
+function pawIcon() { return `<svg viewBox="0 0 40 40" style="width:22px;height:22px;vertical-align:-4px">${pawSVG().replace(/<\/?svg[^>]*>/g, '')}</svg>`; }
+// 미션 실패 공통 처리 (혼내지 않기!)
+const SOFT_FAILS = ['음~ 다시 생각해볼까?', '아깝다! 한 번 더~', '괜찮아, 천천히 해도 돼', '요건 좀 헷갈리지?'];
+function flub(stageIdx, msg) {
+  G.combo = 0;
+  addAff(stageIdx, -TUNING.aff.fail);
+  AudioSys.sMiss(); AudioSys.sHeartDown();
+  if (G.run) {
+    G.run.failStreak++; G.run.failCount++;
+    if (G.run.failStreak >= TUNING.hintAfterFails) $('hintBtn').classList.add('pulse');
+  }
+  toast(msg || pick(SOFT_FAILS), false, 2000);
+  refreshStageHead();
+}
+
+/* ============================================================
+   뭉게의 힌트 시스템 — 탭해야 들려줌 (스스로 고민할 기회 보장)
+   ============================================================ */
+const MAP_TIPS = [
+  '구름에 가려진 집은 앞 친구의 의뢰를 해결하면 열려~',
+  '위쪽 수첩 버튼에서 모은 스탬프를 볼 수 있어!',
+  '도감은 개념 정리 노트이기도 해. 시험 전에 들춰 봐~',
+  '호감도 하트를 가득 채우면 동물 친구의 비밀 이야기를 들을 수 있대!',
+];
+function onHintTap() {
+  AudioSys.ensure(); AudioSys.sPop();
+  if (G.dialogActive) return;
+  if (!G.run) { // 지도에서는 마을 안내
+    Dialog.run([{ who: 'mungge', face: 'happy', text: pick(MAP_TIPS) }]);
+    return;
+  }
+  const r = G.run;
+  const hints = (typeof r.hints === 'function' ? r.hints() : r.hints) || [];
+  if (r.failStreak < TUNING.hintAfterFails || !hints.length) {
+    Dialog.run([{ who: 'mungge', face: 'normal', text: pick([
+      '아직 스스로 해볼 만해! 응원할게~',
+      '조금 더 고민해 보자. 막히면 내가 둥실 나타날게!',
+      '숫자를 잘 관찰해 봐. 규칙이 보일 거야!']) }]);
+    return;
+  }
+  r.hintUsed = true;
+  $('hintBtn').classList.remove('pulse');
+  const lvl = Math.min(r.hintLevel, hints.length - 1);
+  r.hintLevel++;
+  Dialog.run([{ who: 'mungge', face: 'normal', text: `<b>힌트 ${lvl + 1}</b> — ${hints[lvl]}` }]);
+}
+
+/* ============================================================
+   스탬프 수첩
+   ============================================================ */
+function openStampbook() {
+  AudioSys.sPop();
+  const rows = STAGES.map((st, i) => {
+    const a = animalById(st.animal);
+    const slots = st.missions.map((m, k) => G.stamps[i][k]
+      ? `<div class="sbSlot got" title="${m}">${pawSVG(a.tagLine)}</div>`
+      : `<div class="sbSlot" title="${m}"></div>`).join('');
+    const badges = (G.noMiss[i] ? '<span class="sbBadge">노미스 ✦</span>' : '') +
+                   (G.noHint[i] ? '<span class="sbBadge">노힌트 ✦</span>' : '');
+    return `<div class="sbRow"><div class="sbName">${st.title}</div><div class="sbSlots">${slots}</div>${badges}</div>`;
+  }).join('');
+  const titles = G.titles.length
+    ? `<div style="margin-top:8px">${G.titles.map(t => `<span class="titleChip">🏅 ${t}</span>`).join('')}</div>` : '';
+  showOverlay(`<div class="panel">
+    <h2>스탬프 수첩</h2>
+    <p>모은 스탬프 <b style="color:#D9784F">${stampCount()}</b> / ${TOTAL_STAMPS} &nbsp;·&nbsp; 최고 콤보 <b style="color:#E8A24E">${G.bestCombo}</b></p>
+    <div style="margin-top:6px">${rows}</div>${titles}
+    <button class="btn" id="sbClose">닫기</button>
+  </div>`);
+  $('sbClose').addEventListener('pointerdown', e => { e.stopPropagation(); AudioSys.sPop(); hideOverlay(); });
+}
+
+/* ============================================================
+   동물 도감 — 개념 정리 노트
+   ============================================================ */
+function openDex() {
+  AudioSys.sPop();
+  const complete = clearedCount() >= 6;
+  const cards = ANIMALS.map((a, i) => {
+    const got = G.cleared[i];
+    if (!got) return `<div class="dexCard lockd">
+      <div class="dxImg">${charSVG(a.id, 'normal', { prop: false })}</div>
+      <h4>???</h4><div class="dxLike">구름 너머의 친구</div></div>`;
+    return `<div class="dexCard">
+      <div class="dxImg">${charSVG(a.id, 'happy')}</div>
+      <h4>${a.name}</h4>
+      <div class="dxHearts">${heartsRowHTML(G.aff[i])}</div>
+      <div class="dxLike">좋아하는 것: ${a.like}</div>
+      <div class="dxCpt">${a.concept}</div>
+      ${G.secretShown[i] ? `<div class="dxSecret">🔓 비밀: ${a.secret}</div>` : ''}
+    </div>`;
+  }).join('');
+  showOverlay(`<div class="panel ${complete ? 'gold' : ''}" style="max-width:min(940px,96%)">
+    <h2>${complete ? '✨ 금장 동물 도감 ✨' : '동물 도감'} <small style="font-size:15px;color:#B49A85">${clearedCount()}/6</small></h2>
+    ${complete ? '<p style="color:#C09030">마을 친구를 전부 사귀었어요! 도감이 금장으로 빛납니다.</p>' : '<p>의뢰를 해결한 친구가 기록돼요. 도감은 곧 개념 노트!</p>'}
+    <div class="dexGrid">${cards}</div>
+    <button class="btn" id="dxClose">닫기</button>
+  </div>`);
+  $('dxClose').addEventListener('pointerdown', e => { e.stopPropagation(); AudioSys.sPop(); hideOverlay(); });
+}
+
+/* ============================================================
+   장면(스크린) 매니저 + 메인 루프
+   ============================================================ */
+let scene = null;
+function setScene(s) {
+  if (scene && scene.destroy) scene.destroy();
+  $('scene').innerHTML = '';
+  scene = s;
+  if (scene && scene.build) scene.build();
+}
+let _lastT = performance.now();
+function mainLoop(now) {
+  const dt = Math.min(0.05, (now - _lastT) / 1000);
+  _lastT = now;
+  G.time += dt;
+  if (scene && scene.tick) scene.tick(dt);
+  FX.tick(dt);
+  requestAnimationFrame(mainLoop);
+}
+
+/* ============================================================
+   타이틀 화면
+   ============================================================ */
+function showTitle() {
+  G.run = null; setStageHead(null); hideMeters();
+  setScene({
+    build() {
+      $('scene').innerHTML = `
+      <svg class="full" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <linearGradient id="tSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#BFE3F7"/><stop offset=".55" stop-color="#DFF0FB"/><stop offset="1" stop-color="#FFF3E2"/>
+          </linearGradient>
+        </defs>
+        <rect width="1280" height="720" fill="url(#tSky)"/>
+        <circle cx="150" cy="120" r="58" fill="#FFE9A8" opacity=".9"/>
+        <circle cx="150" cy="120" r="76" fill="#FFE9A8" opacity=".28"/>
+        <g class="drift" opacity=".85">${cloudPuffsSVG(220, 46).replace('<g ', '<g transform="translate(300,150)" ')}</g>
+        <g class="drift" style="animation-duration:34s" opacity=".7">${cloudPuffsSVG(160, 36).replace('<g ', '<g transform="translate(900,110)" ')}</g>
+        <path d="M0 640 Q200 580 430 620 Q700 660 900 615 Q1100 580 1280 630 L1280 720 L0 720 Z" fill="#CDEBD2"/>
+        <path d="M0 680 Q300 640 640 668 Q980 692 1280 660 L1280 720 L0 720 Z" fill="#B7E3C8"/>
+        <g transform="translate(640,470) scale(1.15)"><g class="bob">${charSVG('mungge', 'happy').replace('<svg', '<svg x="-62" y="-66" width="124" height="132"')}</g></g>
+        <g transform="translate(430,520) scale(.92)"><g class="bob2">${charSVG('chorong', 'happy').replace('<svg', '<svg x="-62" y="-66" width="124" height="132"')}</g></g>
+        <g transform="translate(850,525) scale(.92)"><g class="bob">${charSVG('mongsil', 'normal').replace('<svg', '<svg x="-62" y="-66" width="124" height="132"')}</g></g>
+      </svg>
+      <div style="position:absolute;left:50%;top:16%;transform:translateX(-50%);text-align:center;pointer-events:none;width:94%">
+        <div style="font-size:clamp(15px,2.6vh,20px);color:#7FA8C8;letter-spacing:3px">뭉게 유니버스 · 대기 안정도와 강수</div>
+        <div style="font-size:clamp(44px,11vh,84px);color:#5B8FC0;text-shadow:0 4px 0 #FFF,0 7px 0 rgba(140,180,215,.35);letter-spacing:2px;margin-top:2px">모구모구 하늘마을</div>
+        <div style="font-size:clamp(15px,2.8vh,20px);color:#8A7263;margin-top:8px">여섯 친구의 고민을, 공기의 마법으로 해결해 주세요!</div>
+      </div>
+      <div style="position:absolute;left:50%;bottom:9%;transform:translateX(-50%);text-align:center">
+        <button class="btn" id="startBtn" style="font-size:clamp(22px,4vh,30px);padding:14px 52px">마을에 놀러가기</button>
+        <div style="font-size:13.5px;color:#A98D77;margin-top:10px">태블릿 가로 화면 · 소리를 켜면 더 몽글몽글해요</div>
+      </div>`;
+      $('startBtn').addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        AudioSys.ensure(); AudioSys.sClear();
+        Dialog.run([
+          { who: 'mungge', face: 'happy', text: '어서 와~ 여기는 폭신폭신 <b>모구모구 하늘마을</b>! 나는 길도우미 <b>뭉게</b>야.' },
+          { who: 'mungge', face: 'normal', text: '마을 친구들이 저마다 고민이 있대. <span class="kw">공기를 다루는 기술</span>로 하나씩 도와주자!' },
+          { who: 'mungge', face: 'proud', text: '막히면 오른쪽 위의 <b>나(뭉게)를 탭</b>해 줘. 힌트를 속닥여 줄게~' },
+        ], showMap);
+      });
+    },
+  });
+}
+
+/* ============================================================
+   마을 지도 (허브)
+   ============================================================ */
+const HOUSE_POS = [
+  { x: 175, y: 555 }, { x: 395, y: 600 },   // 월드1 (들판)
+  { x: 640, y: 480 }, { x: 872, y: 525 },   // 월드2 (산 기슭)
+  { x: 1035, y: 285 }, { x: 800, y: 195 },  // 월드3 (하늘 섬)
+];
+const WORLD_LABEL_POS = [ { x: 275, y: 468 }, { x: 748, y: 398 }, { x: 918, y: 128 } ];
+// 마을 꾸미기 보상: 클리어 수만큼 장식 추가
+const DECOS = [
+  { need: 1, x: 280, y: 640, svg: `<g>${[0,1,2,3].map(i => `<g transform="translate(${i * 34},${(i % 2) * 6})">
+      <path d="M0 18 V6" stroke="#7CBF6E" stroke-width="3"/><circle cx="0" cy="0" r="6.5" fill="${['#F8A8B8','#F7C154','#CBAEE8','#F0A97E'][i]}"/>
+      <circle cx="0" cy="0" r="2.6" fill="#FFF6E8"/></g>`).join('')}</g>` },
+  { need: 2, x: 505, y: 548, svg: `<g><path d="M0 26 V-6" stroke="#B08050" stroke-width="4"/>
+      <ellipse cx="0" cy="-12" rx="13" ry="9" fill="#F5B8C8" stroke="#E896AC" stroke-width="2.5"/>
+      <circle cx="-5" cy="-13" r="2" fill="#FFF"/><circle cx="4" cy="-9" r="2" fill="#FFF"/></g>` },
+  { need: 3, x: 510, y: 430, svg: `<g opacity=".85">${['#F8A8B8','#F7C154','#9FD6B4','#A8C8F0'].map((c, i) =>
+      `<path d="M-70 30 Q0 ${-46 + i * 10} 70 30" stroke="${c}" stroke-width="7" fill="none" stroke-linecap="round"/>`).join('')}</g>` },
+  { need: 4, x: 968, y: 620, svg: `<g>${[0,1,2].map(i => `<g transform="translate(${i * 20 - 20},${i % 2 * 8})">
+      <path d="M0 34 Q4 20 0 8" stroke="#B8A090" stroke-width="1.6" fill="none"/>
+      <ellipse cx="0" cy="0" rx="9" ry="11" fill="${['#F8A8B8','#A8DEC8','#F7C154'][i]}" stroke="#FFF" stroke-width="2"/></g>`).join('')}</g>` },
+  { need: 5, x: 1150, y: 420, svg: `<g><path d="M0 40 V-16" stroke="#8A7A6A" stroke-width="4"/>
+      <circle cx="0" cy="-22" r="9" fill="#FFE9A8" stroke="#E8C25A" stroke-width="2.5"/>
+      <circle cx="0" cy="-22" r="15" fill="#FFE9A8" opacity=".3"/></g>` },
+  { need: 6, x: 640, y: 84, svg: `<g>${[0,1,2,3,4,5].map(i =>
+      `<path d="M${i * 42 - 105} 0 L${i * 42 - 89} 0 L${i * 42 - 97} 14 Z" fill="${['#F8A8B8','#F7C154','#9FD6B4','#A8C8F0','#CBAEE8','#F0A97E'][i]}"/>`).join('')}
+      <path d="M-107 0 H107" stroke="#C8B8A8" stroke-width="2.5"/></g>` },
+];
+function houseSVG(i, cleared, locked) {
+  const a = ANIMALS[i];
+  const body = `
+    <path d="M-40 -8 Q-40 -14 -34 -16 L-6 -46 Q0 -52 6 -46 L34 -16 Q40 -14 40 -8 L40 30 Q40 38 32 38 L-32 38 Q-40 38 -40 30 Z"
+      fill="${a.tag}" stroke="${a.tagLine}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M-38 -13 Q0 -60 38 -13 Q22 -30 0 -30 Q-22 -30 -38 -13 Z" fill="${a.tagLine}" opacity=".55"/>
+    <circle cx="0" cy="-30" r="7" fill="#FFF" stroke="${a.tagLine}" stroke-width="2.5"/>
+    <circle cx="0" cy="-4" r="10.5" fill="${cleared ? '#FFE9A8' : '#FFFDF6'}" stroke="${a.tagLine}" stroke-width="3"/>
+    <path d="M-10.5 -4 H10.5 M0 -14.5 V6.5" stroke="${a.tagLine}" stroke-width="2"/>
+    ${cleared ? '<circle cx="0" cy="-4" r="16" fill="#FFE9A8" opacity=".35"/>' : ''}
+    <rect x="-13" y="14" width="26" height="24" rx="10" fill="#FFFDF6" stroke="${a.tagLine}" stroke-width="3"/>
+    <circle cx="6" cy="27" r="2.2" fill="${a.tagLine}"/>`;
+  const nameTag = locked ? '' : `<g transform="translate(0,56)">
+    <rect x="-52" y="-12" width="104" height="24" rx="12" fill="rgba(255,251,243,.9)" stroke="#E9CDB4" stroke-width="2.5"/>
+    <text x="0" y="5.5" text-anchor="middle" font-size="14" fill="#8A6A52" font-family="Jua">${a.name.split(' ')[1]}네 집</text></g>`;
+  const lockCover = locked ? `
+    <g opacity=".92">
+      <g transform="translate(-16,-18)">${cloudPuffsSVG(74, 26, '#EDF2F8', '#D4DEEA')}</g>
+      <g transform="translate(18,8)">${cloudPuffsSVG(86, 30, '#F2F6FB', '#D4DEEA')}</g>
+      <g transform="translate(-8,26)">${cloudPuffsSVG(70, 24, '#EDF2F8', '#D4DEEA')}</g>
+    </g>` : '';
+  const mark = (!locked && !cleared) ? `<g class="bob"><circle cx="0" cy="-72" r="13" fill="#FBD0A5" stroke="#E8A66F" stroke-width="3"/>
+    <text x="0" y="-66" text-anchor="middle" font-size="17" fill="#B0703F" font-family="Jua">!</text></g>` : '';
+  return `<g ${locked ? 'style="filter:saturate(.25) brightness(1.04);"' : ''}>${body}</g>${lockCover}${nameTag}${mark}`;
+}
+function showMap(opts = {}) {
+  G.run = null; setStageHead(null); hideMeters();
+  $('hintBtn').classList.remove('pulse');
+  updateHud();
+  AudioSys.startBgm('village');
+  setScene({
+    build() {
+      const unlocked = unlockedCount();
+      const houses = STAGES.map((st, i) => {
+        const locked = i >= unlocked;
+        const p = HOUSE_POS[i];
+        const animal = G.cleared[i] ? `<g transform="translate(${p.x + 68},${p.y + 10})"><g class="${i % 2 ? 'bob2' : 'bob'}">
+          ${charSVG(st.animal, 'happy', { attrs: `x="-38" y="-40" width="76" height="80"` })}</g></g>` : '';
+        return `<g id="house${i}" transform="translate(${p.x},${p.y})" style="cursor:pointer">${houseSVG(i, G.cleared[i], locked)}</g>${animal}`;
+      }).join('');
+      const path = HOUSE_POS.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y + 44}`).join(' ');
+      const decos = DECOS.filter(d => clearedCount() >= d.need)
+        .map(d => `<g transform="translate(${d.x},${d.y})">${d.svg}</g>`).join('');
+      const labels = WORLD_LABEL_POS.map((p, i) => `<g transform="translate(${p.x},${p.y})" opacity="${unlocked > i * 2 ? 1 : .45}">
+        <rect x="-108" y="-16" width="216" height="32" rx="16" fill="rgba(255,251,243,.85)" stroke="#E9CDB4" stroke-width="2.5"/>
+        <text x="0" y="6" text-anchor="middle" font-size="16" fill="#B0703F" font-family="Jua">${WORLDS[i]}</text></g>`).join('');
+      $('scene').innerHTML = `
+      <svg class="full" id="mapSvg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs>
+          <linearGradient id="mSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#B5DFF6"/><stop offset=".5" stop-color="#DCEEFA"/><stop offset="1" stop-color="#FFF0DC"/>
+          </linearGradient>
+          <linearGradient id="mMtn" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#D9E6F4"/><stop offset="1" stop-color="#C2D6EC"/>
+          </linearGradient>
+        </defs>
+        <rect width="1280" height="720" fill="url(#mSky)"/>
+        <circle cx="118" cy="104" r="46" fill="#FFE9A8"/>
+        <circle cx="118" cy="104" r="62" fill="#FFE9A8" opacity=".3"/>
+        <g class="drift" opacity=".8"><g transform="translate(430,90)">${cloudPuffsSVG(180, 36)}</g></g>
+        <g class="drift" style="animation-duration:38s" opacity=".6"><g transform="translate(60,210)">${cloudPuffsSVG(130, 30)}</g></g>
+        <!-- 월드2 산 -->
+        <path d="M520 720 L760 330 Q790 290 830 330 L1120 720 Z" fill="url(#mMtn)" stroke="#B4C8E0" stroke-width="3"/>
+        <path d="M745 355 Q790 300 838 355 Q815 345 795 362 Q775 344 745 355 Z" fill="#FFF"/>
+        <!-- 월드3 하늘 섬 -->
+        <g transform="translate(915,255)">
+          <ellipse cx="0" cy="52" rx="240" ry="52" fill="#E8F2FB" stroke="#CBDCEE" stroke-width="3"/>
+          <g transform="translate(-160,60)">${cloudPuffsSVG(140, 34, '#F4F9FE', '#D8E4F0')}</g>
+          <g transform="translate(150,66)">${cloudPuffsSVG(150, 36, '#F4F9FE', '#D8E4F0')}</g>
+        </g>
+        <!-- 월드1 들판 -->
+        <path d="M0 560 Q200 505 420 545 Q640 585 760 560 L760 720 L0 720 Z" fill="#CDEBD2"/>
+        <path d="M0 630 Q260 585 560 625 Q760 650 900 630 L900 720 L0 720 Z" fill="#B7E3C8"/>
+        <path d="${path}" fill="none" stroke="#FFF" stroke-width="7" stroke-dasharray="1 20" stroke-linecap="round" opacity=".9"/>
+        ${decos}${labels}${houses}
+        ${clearedCount() >= 6 ? `<g id="fwAnchor"></g>` : ''}
+      </svg>`;
+      STAGES.forEach((st, i) => {
+        $('house' + i).addEventListener('pointerdown', e => {
+          e.stopPropagation();
+          if (G.dialogActive) return;
+          AudioSys.ensure();
+          if (i >= unlockedCount()) {
+            AudioSys.sWhoosh();
+            toast('아직 구름에 가려져 있어… 앞 친구의 의뢰부터!', false, 1700);
+            return;
+          }
+          AudioSys.sPop();
+          startStage(i);
+        });
+      });
+      if (opts.intro) {
+        Dialog.run([{ who: 'mungge', face: 'normal', text: '반짝이는 <b>!</b> 집을 탭하면 친구의 의뢰를 들을 수 있어~' }]);
+      }
+      // 전체 클리어 후 지도: 폭죽 축포
+      this.fwTimer = clearedCount() >= 6 ? 0.5 : Infinity;
+    },
+    tick(dt) {
+      this.fwTimer -= dt;
+      if (this.fwTimer <= 0) {
+        this.fwTimer = 1.6 + Math.random();
+        FX.firework(innerWidth * (0.2 + Math.random() * 0.6), innerHeight * (0.12 + Math.random() * 0.25));
+      }
+    },
+  });
+  G.screen = 'map';
+}
+</script>
+<script>
+'use strict';
+/* ============================================================
+   스테이지 공통 프레임워크
+   ============================================================ */
+const STAGE_BGM = ['w1', 'w1', 'w2', 'w2', 'w3', 'w3'];
+let STAGE_BUILDERS = []; // 각 스테이지 씬 팩토리 (아래에서 채움)
+
+function startStage(i) {
+  G.run = { idx: i, mIdx: 0, failStreak: 0, failCount: 0, hintUsed: false, hintLevel: 0, hints: [] };
+  setStageHead(i);
+  $('hintBtn').classList.remove('pulse');
+  AudioSys.startBgm(STAGE_BGM[i]);
+  G.screen = 'stage';
+  setScene(STAGE_BUILDERS[i]());
+}
+function setMission(m, hints) {
+  if (!G.run) return;
+  G.run.mIdx = m; G.run.failStreak = 0; G.run.hintLevel = 0;
+  if (hints) G.run.hints = hints;
+  refreshStageHead();
+}
+// 스테이지 클리어: 노미스/노힌트 정산 → 칭호 → 결과 패널
+function stageComplete(idx) {
+  const noMiss = G.run && G.run.failCount === 0;
+  const noHint = G.run && !G.run.hintUsed;
+  if (noMiss) {
+    if (!G.noMiss[idx]) G.noMiss[idx] = true;
+    addAff(idx, TUNING.aff.perfect);
+  }
+  if (noHint) G.noHint[idx] = true;
+  G.cleared[idx] = true;
+  if (idx === 1 && noHint) grantTitle('숨은열 박사');
+  if (idx === 2 && noMiss) grantTitle('구름 장인');
+  if (idx === 3) grantTitle('바람 배달왕');
+  if (idx === 4) grantTitle('하늘 감정사');
+  updateHud();
+  if (idx === 5) { showEnding(); return; }
+  showResultPanel(idx, { noMiss, noHint });
+}
+function showResultPanel(idx, f) {
+  const st = STAGES[idx], a = animalById(st.animal);
+  AudioSys.sFanfare();
+  FX.confetti(innerWidth / 2, innerHeight * 0.3, TUNING.fx.confettiN);
+  const stampsRow = st.missions.map(() => `<span style="display:inline-block;width:46px;height:46px;margin:0 3px;
+    border-radius:50%;background:#FFF0E4;border:3px solid #F0B497;padding:4px">${pawSVG(a.tagLine)}</span>`).join('');
+  showOverlay(`<div class="panel">
+    <div style="width:132px;height:138px;margin:-6px auto 0">${charSVG(a.id, 'wow')}</div>
+    <h2>의뢰 해결!</h2>
+    <p><b>${st.title}</b> — ${a.name}의 고민이 사라졌어요!</p>
+    <div style="margin:8px 0 2px">${stampsRow}</div>
+    <div style="margin:4px 0">${heartsRowHTML(G.aff[idx]).replace(/<svg /g, '<svg style="width:26px;height:24px" ')}</div>
+    <div>${f.noMiss ? '<span class="sbBadge">✦ 노미스 보너스 +1♥</span>' : ''}
+         ${f.noHint ? '<span class="sbBadge">✦ 노힌트 배지</span>' : ''}</div>
+    <p style="font-size:14px;color:#A98D77;margin-top:6px">도감에 ${a.species} 친구가 기록되고, 마을에 새 장식이 생겼어요!</p>
+    <button class="btn" id="toMapBtn">마을로 돌아가기</button>
+  </div>`);
+  $('toMapBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation(); AudioSys.sPop(); hideOverlay(); showMap();
+  });
+}
+
+/* ---- 공통 부품 ---- */
+function charNested(who, face, x, y, w, h, opt = {}) {
+  return charSVG(who, face, Object.assign({ attrs: `x="${x}" y="${y}" width="${w}" height="${h}"` }, opt));
+}
+function rulerSVG(x, groundY, pxPerKm, maxKm) {
+  let s = `<line x1="${x}" y1="${groundY}" x2="${x}" y2="${groundY - pxPerKm * maxKm}" stroke="#D9C6AE" stroke-width="3"/>`;
+  for (let k = 0; k <= maxKm + 0.001; k += 0.5) {
+    const y = groundY - pxPerKm * k, big = Math.abs(k % 1) < 0.01;
+    s += `<line x1="${x - (big ? 12 : 7)}" y1="${y}" x2="${x}" y2="${y}" stroke="#D9C6AE" stroke-width="${big ? 3 : 2}"/>`;
+    if (big) s += `<text x="${x - 18}" y="${y + 5}" text-anchor="end" font-size="15" fill="#A98D77" font-family="Jua">${k} km</text>`;
+  }
+  return s;
+}
+// 공기 덩어리 (표정 있는 투명 방울)
+function parcelSVG(id, r = 38) {
+  return `<g id="${id}" style="cursor:grab">
+    <circle r="${r + 12}" fill="rgba(255,255,255,.22)"/>
+    <path d="${blobD(0, 0, r, 4)}" fill="rgba(255,255,255,.85)" stroke="#C6DCF0" stroke-width="3.5" stroke-linejoin="round"/>
+    <circle cx="-11" cy="-5" r="3" fill="#5B4A44"/><circle cx="11" cy="-5" r="3" fill="#5B4A44"/>
+    <circle cx="-19" cy="3" r="4.4" fill="#F9C6C0" opacity=".85"/><circle cx="19" cy="3" r="4.4" fill="#F9C6C0" opacity=".85"/>
+    <path d="M-6 7 Q0 12 6 7" stroke="#5B4A44" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  </g>`;
+}
+// 세로 드래그 (포인터 이벤트, 터치 최우선)
+function attachVDrag(svg, grabEl, state, opts) {
+  const move = e => {
+    const p = svgPt(svg, e);
+    state.targetAlt = clamp((opts.groundY - p.y) / opts.pxPerKm, 0, opts.maxKm);
+  };
+  grabEl.addEventListener('pointerdown', e => {
+    if (G.dialogActive || state.locked) return;
+    e.preventDefault(); e.stopPropagation();
+    state.held = true;
+    grabEl.setPointerCapture(e.pointerId);
+    move(e);
+  });
+  grabEl.addEventListener('pointermove', e => { if (state.held) move(e); });
+  const up = () => { state.held = false; };
+  grabEl.addEventListener('pointerup', up);
+  grabEl.addEventListener('pointercancel', up);
+}
+function svgToScreen(svg, x, y) {
+  const p = svg.createSVGPoint(); p.x = x; p.y = y;
+  const m = svg.getScreenCTM();
+  return m ? p.matrixTransform(m) : { x: 0, y: 0 };
+}
+
+/* ============================================================
+   S1 — 초롱이의 더위 탈출 (단열 팽창/압축)
+   ============================================================ */
+STAGE_BUILDERS[0] = function () {
+  const C = TUNING.s1;
+  const GY = 596, PX = 200, X = 620;   // 지표 y, px/km, 공기 x
+  const st = { alt: 0, targetAlt: 0, held: false, locked: true, round: 0, hold: 0, done: false };
+  const HINTS = [
+    ['공기는 열을 안 받아도, <b>올라가면 팽창하며 스스로 식어</b>. 1 km마다 10 ℃씩!', '지금 30 ℃니까… 20 ℃가 되려면 <b>1 km</b> 위로 끌어올려 봐!'],
+    ['규칙은 똑같아. <b>1 km에 10 ℃</b>! 목표까지 몇 ℃ 식혀야 할까?', '30 ℃에서 15 ℃까지는 15 ℃… <b>1.5 km</b>까지 쭉!'],
+    ['이번엔 반대! 공기는 <b>내려오면 압축되며 데워져</b>. 역시 1 km에 10 ℃!', '지금 높이의 온도에서 25 ℃가 되도록 <b>아래로</b> 내려 봐. 0.5 km쯤에서 25 ℃!'],
+  ];
+  return {
+    build() {
+      $('scene').innerHTML = `
+      <svg class="full" id="s1svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s1sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#9CCBEE"/><stop offset=".6" stop-color="#D8ECFA"/><stop offset="1" stop-color="#FFEEDC"/>
+        </linearGradient></defs>
+        <rect width="1280" height="720" fill="url(#s1sky)"/>
+        <circle cx="850" cy="118" r="50" fill="#FFDF8E"/><circle cx="850" cy="118" r="68" fill="#FFDF8E" opacity=".3"/>
+        <g class="drift" opacity=".7"><g transform="translate(300,140)">${cloudPuffsSVG(150, 32)}</g></g>
+        ${rulerSVG(150, GY, PX, C.maxKm)}
+        <path d="M0 ${GY + 6} Q320 ${GY - 26} 640 ${GY + 2} Q960 ${GY + 26} 1280 ${GY - 6} L1280 720 L0 720 Z" fill="#E8C89A"/>
+        <path d="M0 ${GY + 52} Q400 ${GY + 30} 1280 ${GY + 46} L1280 720 L0 720 Z" fill="#D8B078"/>
+        <g id="s1carrots"></g>
+        <g id="s1chorong" transform="translate(1050,${GY - 54})"></g>
+        <g id="s1heat" opacity="1">
+          ${[0, 1, 2].map(i => `<path d="M${920 + i * 60} ${GY - 40} q10 -14 0 -28 q-10 -14 0 -28" stroke="#F0A97E" stroke-width="4" fill="none" stroke-linecap="round" opacity=".7"/>`).join('')}
+        </g>
+        <g id="s1zone" opacity="0"></g>
+        <g id="s1pcl" transform="translate(${X},${GY - 44})">${parcelSVG('s1pclInner')}
+          <circle id="s1ring" r="62" fill="none" stroke="#8FCBA8" stroke-width="7" stroke-linecap="round"
+            stroke-dasharray="390" stroke-dashoffset="390" transform="rotate(-90)"/>
+        </g>
+        <text x="${X}" y="${GY - 130}" id="s1grabTip" text-anchor="middle" font-size="19" fill="#7FA8C8" font-family="Jua" class="bob" style="transform-box:fill-box">▲ 공기 방울을 잡고 끌어올려 봐!</text>
+      </svg>
+      <div class="orderCard" style="left:14px;top:76px">
+        <div class="oTag" id="s1RoundTag">라운드 1 / 3</div>
+        <div class="oTxt" id="s1Order"></div>
+      </div>`;
+      this.svg = $('s1svg');
+      // 당근밭
+      $('s1carrots').innerHTML = [0, 1, 2, 3, 4].map(i => {
+        const cx = 300 + i * 88, cy = GY + 26;
+        return `<g class="cr" transform="translate(${cx},${cy})">
+          <g id="s1cr${i}" transform="scale(.55)">
+            <path d="M0 4 L10 34 L-8 32 Z" fill="#F79A54" stroke="#E07E38" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M0 2 q-8 -12 -3 -19 M3 1 q3 -14 11 -15 M1 1 q-1 -13 5 -19" stroke="#7CBF6E" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+          </g></g>`;
+      }).join('');
+      this.setChorong('pant');
+      attachVDrag(this.svg, $('s1pcl'), st, { groundY: GY - 44, pxPerKm: PX, maxKm: C.maxKm });
+      const a = animalById('chorong');
+      Dialog.run([
+        { who: 'chorong', face: 'pant', text: '헥헥… 어서 와아. <b>당근밭이 너무 더워서</b> 당근이 축 처졌어…' },
+        { who: 'chorong', face: 'puzzled', text: '저기 하늘 위는 시원하다던데, 시원한 공기 좀 부탁해도 될까?' },
+        { who: 'mungge', face: 'normal', text: '규칙 하나! 공기 덩어리는 <b>1 km 올라갈 때마다 10 ℃씩</b> 식어. 열을 주고받지 않아도 <span class="kw">팽창</span>하면서 스스로!' },
+      ], () => this.startRound(0));
+    },
+    setChorong(face) { $('s1chorong').innerHTML = charNested('chorong', face, -70, -76, 140, 148); },
+    startRound(r) {
+      st.round = r; st.hold = 0; st.locked = false; st.done = false;
+      const R = C.rounds[r];
+      setMission(r, HINTS[r]);
+      $('s1RoundTag').textContent = `라운드 ${r + 1} / 3`;
+      $('s1Order').innerHTML = `${R.label} 부탁해!`;
+      if (R.startAlt != null) {
+        st.alt = st.targetAlt = R.startAlt;
+        toast('찬 공기가 하늘 위에서 기다리고 있어! 이번엔 아래로~', true, 2200);
+      } else { st.alt = st.targetAlt = 0; }
+      this.setChorong(r === 2 ? 'puzzled' : 'pant');
+      $('s1heat').style.opacity = r === 2 ? 0 : 1;
+    },
+    inGoal(T) {
+      const R = C.rounds[st.round];
+      return R.type === 'le' ? T <= R.target : Math.abs(T - R.target) <= R.tol;
+    },
+    tick(dt) {
+      if (st.done && !G.dialogActive) { /* 라운드 사이 대기 */ }
+      st.alt += (st.targetAlt - st.alt) * Math.min(1, dt * 8);
+      const T = C.T0 - RATE.DRY * st.alt;
+      const Td = C.Td0 - RATE.DEW * st.alt;
+      setMeters(st.alt, T, Td);
+      const g = $('s1pcl'); if (!g) return;
+      const scale = 1 + 0.16 * st.alt;   // 단열 팽창: 위로 갈수록 몸집이 커짐
+      g.setAttribute('transform', `translate(${X},${GY - 44 - st.alt * PX}) scale(${scale.toFixed(3)})`);
+      const body = g.querySelector('path');
+      if (body) body.setAttribute('fill', T <= 16 ? 'rgba(224,240,255,.9)' : T >= 26 ? 'rgba(255,236,222,.9)' : 'rgba(255,255,255,.85)');
+      if (st.alt > 0.15) $('s1grabTip').style.opacity = 0;
+      // 목표 유지 판정
+      if (!st.done && !G.dialogActive) {
+        if (this.inGoal(T)) {
+          st.hold += dt;
+          if (st.hold > 0.15 && Math.floor((st.hold - dt) * 6) !== Math.floor(st.hold * 6)) AudioSys.sTick();
+        } else st.hold = Math.max(0, st.hold - dt * 2);
+        $('s1ring').setAttribute('stroke-dashoffset', 390 * (1 - clamp(st.hold / TUNING.holdSec, 0, 1)));
+        if (st.hold >= TUNING.holdSec) this.roundClear(T);
+      }
+    },
+    roundClear(T) {
+      st.done = true; st.locked = true; st.held = false;
+      $('s1ring').setAttribute('stroke-dashoffset', 390);
+      AudioSys.sSparkle();
+      // 당근 쑥쑥 + 초롱이 리액션
+      [0, 1, 2, 3, 4].forEach((i) => {
+        const el = $('s1cr' + i);
+        if (el) el.setAttribute('transform', `scale(${0.55 + (st.round + 1) * 0.22})`);
+      });
+      this.setChorong(st.round === 2 ? 'wow' : 'happy');
+      const p = svgToScreen(this.svg, 1050, GY - 60);
+      FX.burst(p.x, p.y, '#9FD6B4', 16);
+      const r = st.round;
+      celebrate(0, r, () => {
+        if (r < 2) {
+          Dialog.run([{ who: 'chorong', face: r === 0 ? 'happy' : 'wow',
+            text: r === 0 ? '와아, 시원해! 당근 잎이 살아났어! <b>더 시원한 것</b>도 될까?'
+                          : '굉장해! …앗, 그런데 너무 시원했나? 이번엔 밭이 좀 <b>추워졌어</b>!' }],
+            () => this.startRound(r + 1));
+        } else {
+          Dialog.run([
+            { who: 'chorong', face: 'wow', text: '따끈따끈~ 완벽한 온도야! 내려온 공기는 <b>눌리면서 데워지는구나</b>!' },
+            { who: 'mungge', face: 'proud', text: '오르면 <b>팽창해서 시원</b>, 내리면 <b>압축돼서 따끈</b>. 이게 <span class="kw">단열 변화</span>야!' },
+          ], () => stageComplete(0));
+        }
+      });
+    },
+  };
+};
+
+/* ============================================================
+   S2 — 가시롱의 비밀 수업 (숨은열: 감률이 다른 이유)
+   ============================================================ */
+STAGE_BUILDERS[1] = function () {
+  const C = TUNING.s2;
+  const GY = 640, TOPY = 104, PX = (GY - TOPY) / C.maxKm, X = 1080;
+  const H = lclHeight(C.T0, C.Td0); // 1.0 km
+  const st = { alt: 0, targetAlt: 0, held: false, locked: true, latent: true,
+               recOff: null, recOn: null, prevAlt: 0, quizOn: false };
+  // 그래프 좌표
+  const GX0 = 430, GX1 = 830, GY0 = 560, GY1 = 150, TMIN = -15, TMAX = 25;
+  const gx = T => GX0 + (T - TMIN) / (TMAX - TMIN) * (GX1 - GX0);
+  const gy = a => GY0 - a / C.maxKm * (GY0 - GY1);
+  const HINTS_REC = ['스위치를 <b>OFF와 ON</b> 각각으로 두고, 공기를 <b>3 km 금긋기</b>까지 끌어올려 봐!',
+    '3 km 선을 넘는 순간 온도가 기록돼. 두 세계를 모두 체험하면 돼!'];
+  const HINTS_QUIZ = ['돋보기를 봐! 물방울이 맺힐 때 <b>반짝반짝 온기</b>가 나왔지? 그게 정답의 열쇠야.',
+    '응결할 때 나온 <b>숨은열</b>이 공기를 데워 줘서, 식는 속도가 절반(5 ℃/km)이 된 거야!'];
+  return {
+    build() {
+      const offPath = `M${gx(C.T0)} ${gy(0)} L${gx(C.T0 - 10 * C.maxKm)} ${gy(C.maxKm)}`;
+      const r1 = riseState(C.T0, C.Td0, H), rTop = riseState(C.T0, C.Td0, C.maxKm);
+      const onPath = `M${gx(C.T0)} ${gy(0)} L${gx(r1.T)} ${gy(H)} L${gx(rTop.T)} ${gy(C.maxKm)}`;
+      $('scene').innerHTML = `
+      <svg class="full" id="s2svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s2sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#A8C8E8"/><stop offset=".65" stop-color="#DCE9F6"/><stop offset="1" stop-color="#F5E8D2"/>
+        </linearGradient></defs>
+        <rect width="1280" height="720" fill="url(#s2sky)"/>
+        <path d="M900 720 L900 ${GY} Q1090 ${GY - 24} 1280 ${GY} L1280 720 Z" fill="#C8B490" opacity="0"/>
+        ${rulerSVG(940, GY, PX, C.maxKm)}
+        <line x1="940" y1="${GY - PX * H}" x2="1230" y2="${GY - PX * H}" stroke="#8FB8DC" stroke-width="2.5" stroke-dasharray="8 7"/>
+        <text x="1234" y="${GY - PX * H - 6}" text-anchor="end" font-size="14" fill="#6E86B8" font-family="Jua">응결 고도 1 km</text>
+        <line x1="940" y1="${GY - PX * C.checkKm}" x2="1230" y2="${GY - PX * C.checkKm}" stroke="#E8A24E" stroke-width="3.5" stroke-dasharray="3 8"/>
+        <text x="1234" y="${GY - PX * C.checkKm - 8}" text-anchor="end" font-size="15" fill="#C88A2E" font-family="Jua">측정선 3 km ★</text>
+        <path d="M900 ${GY} Q1090 ${GY - 18} 1280 ${GY - 4} L1280 720 L900 720 Z" fill="#CDE4C2"/>
+        <!-- 돋보기 뷰 -->
+        <g transform="translate(238,320)">
+          <circle r="168" fill="rgba(230,242,252,.55)" stroke="#B4CCE4" stroke-width="5"/>
+          <circle r="150" fill="none" stroke="#FFF" stroke-width="2.5" opacity=".8"/>
+          <line x1="112" y1="128" x2="196" y2="222" stroke="#B4CCE4" stroke-width="20" stroke-linecap="round"/>
+          <text x="0" y="-138" text-anchor="middle" font-size="15" fill="#7A94B8" font-family="Jua">공기 덩어리 속 돋보기</text>
+          <g id="s2drops"></g>
+          <text id="s2dropCap" x="0" y="146" text-anchor="middle" font-size="15" fill="#6E86B8" font-family="Jua">수증기가 둥둥…</text>
+        </g>
+        <!-- 높이-온도 그래프 -->
+        <g>
+          <rect x="${GX0 - 52}" y="${GY1 - 40}" width="${GX1 - GX0 + 84}" height="${GY0 - GY1 + 96}" rx="20" fill="rgba(255,253,248,.9)" stroke="#EAD3BC" stroke-width="3"/>
+          <text x="${(GX0 + GX1) / 2}" y="${GY1 - 14}" text-anchor="middle" font-size="16" fill="#A98D77" font-family="Jua">높이 – 온도 그래프 (두 세계 비교)</text>
+          <line x1="${GX0}" y1="${GY0}" x2="${GX1}" y2="${GY0}" stroke="#D9C6AE" stroke-width="2.5"/>
+          <line x1="${GX0}" y1="${GY0}" x2="${GX0}" y2="${GY1}" stroke="#D9C6AE" stroke-width="2.5"/>
+          ${[-10, 0, 10, 20].map(T => `<text x="${gx(T)}" y="${GY0 + 22}" text-anchor="middle" font-size="13" fill="#A98D77" font-family="Jua">${T}℃</text>
+            <line x1="${gx(T)}" y1="${GY0}" x2="${gx(T)}" y2="${GY1}" stroke="#F2E6D2" stroke-width="1.5"/>`).join('')}
+          ${[1, 2, 3].map(a => `<text x="${GX0 - 12}" y="${gy(a) + 5}" text-anchor="end" font-size="13" fill="#A98D77" font-family="Jua">${a}km</text>
+            <line x1="${GX0}" y1="${gy(a)}" x2="${GX1}" y2="${gy(a)}" stroke="#F2E6D2" stroke-width="1.5"/>`).join('')}
+          <line x1="${GX0}" y1="${gy(H)}" x2="${GX1}" y2="${gy(H)}" stroke="#8FB8DC" stroke-width="2" stroke-dasharray="7 6"/>
+          <path d="${offPath}" stroke="#8898B8" stroke-width="4" fill="none" stroke-dasharray="10 7" stroke-linecap="round" opacity=".9"/>
+          <path d="${onPath}" stroke="#E8926C" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+          <text x="${gx(-11)}" y="${gy(2.65)}" font-size="14" fill="#8898B8" font-family="Jua">OFF 세계 (-10℃/km 계속)</text>
+          <text x="${gx(9)}" y="${gy(2.2)}" font-size="14" fill="#D9784F" font-family="Jua">ON 실제 세계 (응결 후 -5℃/km)</text>
+          <circle id="s2dot" r="7" fill="#E8926C" stroke="#FFF" stroke-width="2.5"/>
+          <g id="s2chipOff" transform="translate(${GX0 + 10},${GY1 + 6})" opacity=".45">
+            <rect width="150" height="30" rx="14" fill="#EDF0F6" stroke="#B8C4D8" stroke-width="2.5"/>
+            <text x="75" y="20" text-anchor="middle" font-size="14.5" fill="#68789A" font-family="Jua">OFF · 3km: ?? ℃</text></g>
+          <g id="s2chipOn" transform="translate(${GX0 + 172},${GY1 + 6})" opacity=".45">
+            <rect width="150" height="30" rx="14" fill="#FDF0E6" stroke="#E8B488" stroke-width="2.5"/>
+            <text x="75" y="20" text-anchor="middle" font-size="14.5" fill="#C87840" font-family="Jua">ON · 3km: ?? ℃</text></g>
+        </g>
+        <g id="s2gasirong" transform="translate(760,652)"></g>
+        <g id="s2pcl" transform="translate(${X},${GY - 46})">${parcelSVG('s2pclInner')}</g>
+      </svg>
+      <div class="ctrl" style="left:14px;bottom:14px">
+        <div class="lhSwitch">
+          <span class="swLab">숨은열 스위치</span>
+          <div class="swTrack on" id="s2sw"><div class="swKnob">🔥</div></div>
+          <span class="swState onn" id="s2swState">ON · 실제 세계</span>
+        </div>
+        <div style="font-size:13px;color:#A98D77;margin-top:4px" id="s2swDesc">응결하면 숨은열이 나와 공기를 데워요 (−5 ℃/km)</div>
+      </div>`;
+      this.svg = $('s2svg');
+      $('s2gasirong').innerHTML = charNested('gasirong', 'normal', -66, -72, 132, 140);
+      // 돋보기 속 수증기 알갱이 14개
+      this.drops = [];
+      let dHtml = '';
+      for (let i = 0; i < 14; i++) {
+        const a = Math.random() * TAU, rr = 20 + Math.random() * 100;
+        const dx = Math.cos(a) * rr, dy = Math.sin(a) * rr * 0.8;
+        this.drops.push({ x: dx, y: dy, ph: Math.random() * TAU });
+        dHtml += `<g id="s2dp${i}" transform="translate(${dx.toFixed(0)},${dy.toFixed(0)})">
+          <circle r="7" fill="none" stroke="#9CC2E4" stroke-width="2.5" opacity=".85"/>
+          <path d="M0 -9 q6 8 0 13 q-6 -5 0 -13 Z" fill="#7EB2E4" opacity="0"/>
+        </g>`;
+      }
+      $('s2drops').innerHTML = dHtml;
+      $('s2sw').addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        if (st.locked && !st.held) { /* 드래그 잠금과 무관하게 스위치는 항상 가능 */ }
+        st.latent = !st.latent;
+        AudioSys.ensure(); AudioSys.sPop();
+        $('s2sw').classList.toggle('on', st.latent);
+        $('s2sw').querySelector('.swKnob').textContent = st.latent ? '🔥' : '✕';
+        const stt = $('s2swState');
+        stt.textContent = st.latent ? 'ON · 실제 세계' : 'OFF · 가상 세계';
+        stt.className = 'swState ' + (st.latent ? 'onn' : 'off');
+        $('s2swDesc').textContent = st.latent ? '응결하면 숨은열이 나와 공기를 데워요 (−5 ℃/km)'
+                                              : '가상 실험: 응결해도 열이 안 나와요 (−10 ℃/km 그대로)';
+      });
+      attachVDrag(this.svg, $('s2pcl'), st, { groundY: GY - 46, pxPerKm: PX, maxKm: C.maxKm });
+      Dialog.run([
+        { who: 'gasirong', face: 'normal', text: '어서 와. 나는 궁금한 게 있으면 잠이 안 오는 가시롱이야…' },
+        { who: 'gasirong', face: 'puzzled', text: '공기는 구름 속(포화 상태)에선 <b>왜 천천히 식는 걸까?</b> 그게 궁금해서 사흘째 뒤척이는 중이야.' },
+        { who: 'mungge', face: 'normal', text: '좋아, <span class="kw">숨은열 스위치</span>로 실험해 보자! 스위치를 바꿔 가며 공기를 <b>3 km 측정선</b>까지 올려 봐.' },
+      ], () => { st.locked = false; setMission(0, HINTS_REC); });
+    },
+    state() { return st.latent ? riseState(C.T0, C.Td0, st.alt) : riseStateNoLatent(C.T0, C.Td0, st.alt); },
+    tick(dt) {
+      st.alt += (st.targetAlt - st.alt) * Math.min(1, dt * 8);
+      const s = this.state();
+      setMeters(st.alt, s.T, s.Td);
+      const g = $('s2pcl'); if (!g) return;
+      const scale = 1 + 0.13 * st.alt;
+      g.setAttribute('transform', `translate(${X},${GY - 46 - st.alt * PX}) scale(${scale.toFixed(3)})`);
+      $('s2dot').setAttribute('cx', gx(s.T)); $('s2dot').setAttribute('cy', gy(st.alt));
+      $('s2dot').setAttribute('fill', st.latent ? '#E8926C' : '#8898B8');
+      // 돋보기: 응결 여부에 따라 수증기 ↔ 물방울
+      const sat = s.saturated;
+      this.drops.forEach((d, i) => {
+        const el = $('s2dp' + i); if (!el) return;
+        const jx = d.x + Math.sin(G.time * 1.3 + d.ph) * 5, jy = d.y + Math.cos(G.time * 1.1 + d.ph) * 5;
+        el.setAttribute('transform', `translate(${jx.toFixed(1)},${jy.toFixed(1)})`);
+        el.children[0].setAttribute('opacity', sat ? 0 : 0.85);
+        el.children[1].setAttribute('opacity', sat ? 0.95 : 0);
+      });
+      $('s2dropCap').textContent = sat
+        ? (st.latent ? '응결! 물방울 + 온기(숨은열) 뿅뿅!' : '응결… 하지만 열이 안 나와 (가상)')
+        : '수증기가 둥둥…';
+      // 숨은열 온기 입자: ON + 포화 + 상승 중
+      if (st.latent && sat && st.alt > st.prevAlt + 0.001 && Math.random() < 0.5) {
+        const m = svgToScreen(this.svg, 238 + (Math.random() - 0.5) * 180, 320 + (Math.random() - 0.5) * 150);
+        FX.warm(m.x, m.y, 2);
+        const pp = svgToScreen(this.svg, X, GY - 46 - st.alt * PX);
+        FX.warm(pp.x, pp.y, 1);
+      }
+      // 응결 순간 효과음
+      if (sat && !this.wasSat) { AudioSys.sCondense(); }
+      this.wasSat = sat;
+      // 3 km 측정선 통과 기록
+      if (!st.quizOn && st.prevAlt < C.checkKm && st.alt >= C.checkKm) this.record(s);
+      st.prevAlt = st.alt;
+    },
+    record(s) {
+      const key = st.latent ? 'recOn' : 'recOff';
+      if (st[key] == null) {
+        st[key] = s.T;
+        AudioSys.sStamp();
+        const chip = $(st.latent ? 's2chipOn' : 's2chipOff');
+        chip.setAttribute('opacity', 1);
+        chip.querySelector('text').textContent = `${st.latent ? 'ON' : 'OFF'} · 3km: ${fmt1(s.T)} ℃`;
+        const p = svgToScreen(this.svg, X, GY - 46 - C.checkKm * PX);
+        FX.burst(p.x, p.y, st.latent ? '#F0A97E' : '#8898B8', 12);
+        toast(`측정 완료! ${st.latent ? 'ON(실제)' : 'OFF(가상)'} 세계의 3 km는 <b>${fmt1(s.T)} ℃</b>`, true, 2200);
+        if (st.recOn != null && st.recOff != null) {
+          st.quizOn = true; st.locked = true;
+          celebrate(1, 0, () => this.startQuiz());
+        }
+      }
+    },
+    startQuiz() {
+      setMission(1, HINTS_QUIZ);
+      $('s2gasirong').innerHTML = charNested('gasirong', 'puzzled', -66, -72, 132, 140);
+      Dialog.run([
+        { who: 'gasirong', face: 'wow', text: `오오… 같은 3 km인데 OFF는 <b>${fmt1(st.recOff)} ℃</b>, ON은 <b>${fmt1(st.recOn)} ℃</b>! 10 ℃나 차이 나잖아?` },
+        { who: 'gasirong', face: 'puzzled', text: '그럼 문제! 실제 세계의 구름 속 공기가 <b>천천히 식는 이유</b>가 뭐게?' },
+      ], () => this.showQuiz());
+    },
+    showQuiz() {
+      const opts = shuffle([
+        { t: '수증기가 응결할 때 내놓은 숨은열이 공기를 데워 줘서', ok: true },
+        { t: '구름 속 물방울이 햇빛을 가려 온도계가 착각해서', ok: false },
+        { t: '높이 올라가면 공기가 무거워져 열이 안 빠져나가서', ok: false },
+      ]);
+      showOverlay(`<div class="panel" style="max-width:640px">
+        <div style="width:96px;height:100px;margin:0 auto">${charSVG('gasirong', 'puzzled')}</div>
+        <h3>구름 속(포화 공기)에서 천천히 식는 이유는?</h3>
+        <div style="margin-top:8px">${opts.map((o, i) => `<button class="quizOpt" id="s2q${i}">${'①②③'[i]} ${o.t}</button>`).join('')}</div>
+      </div>`);
+      opts.forEach((o, i) => {
+        $('s2q' + i).addEventListener('pointerdown', e => {
+          e.stopPropagation();
+          if (o.ok) {
+            $('s2q' + i).classList.add('right');
+            AudioSys.sSparkle();
+            setTimeout(() => { hideOverlay(); this.finish(); }, 700);
+          } else {
+            $('s2q' + i).classList.add('wrong');
+            shake();
+            flub(1, '갸우뚱… 돋보기에서 본 반짝임을 떠올려 봐!');
+            setTimeout(() => $('s2q' + i).classList.remove('wrong'), 900);
+          }
+        });
+      });
+    },
+    finish() {
+      celebrate(1, 1, () => {
+        // 가시롱이 동그랗게 말리는 리액션: 몸을 공처럼
+        $('s2gasirong').innerHTML = `<g class="bob">${charNested('gasirong', 'sleep', -66, -72, 132, 140, { prop: true })}</g>`;
+        Dialog.run([
+          { who: 'gasirong', face: 'wow', text: '그렇구나… 응결할 때 나온 <b>숨은열</b>이 공기를 데워서 <b>−10이 아니라 −5 ℃/km</b>가 되는 거였어!' },
+          { who: 'gasirong', face: 'sleep', text: '후아… 궁금증이 풀리니 잠이 솔솔 와. 낙엽 이불 덮고… 이제 편하게 낮잠 잘 수 있겠어… 쿨쿨.' },
+          { who: 'mungge', face: 'happy', text: '쉿, 재워 주자~ <span class="kw">숨은열 = 구름 속 보온 히터</span>. 잊지 마!' },
+        ], () => stageComplete(1));
+      }, { big: true });
+    },
+  };
+};
+</script>
+<script>
+'use strict';
+/* ============================================================
+   S3 — 몽실이의 구름 침대 (상승 응결 고도 H = ⅛(T − Td))
+   ============================================================ */
+STAGE_BUILDERS[2] = function () {
+  const C = TUNING.s3;
+  const GY = 606, TOPY = 100, PX = (GY - TOPY) / C.maxKm, BX = 660;
+  const st = { T: C.T.init, Td: C.Td.init, mode: 'idle', alt: 0, round: 0, jump: -1 };
+  const HINTS = [
+    ['뭉게의 공식 카드를 봐! <b>H = ⅛ × (T − Td)</b>. 침대 높이에 맞는 (T−Td)를 만들면 돼.',
+     'H가 1.0 km가 되려면 <b>T − Td = 8</b>! 예를 들면 기온 22 ℃, 이슬점 14 ℃.'],
+    ['⅛ × (T − Td) = 2.0이 되려면… (T − Td)는 얼마여야 할까?',
+     '<b>T − Td = 16</b>이면 돼! 예: 기온 26 ℃, 이슬점 10 ℃.'],
+    ['이제 마지막! 1.5 km면 (T − Td)는?',
+     '<b>T − Td = 12</b>! 예: 기온 24 ℃, 이슬점 12 ℃.'],
+  ];
+  return {
+    build() {
+      $('scene').innerHTML = `
+      <svg class="full" id="s3svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s3sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#A4CDEE"/><stop offset=".6" stop-color="#DCEDF9"/><stop offset="1" stop-color="#F2E6F4"/>
+        </linearGradient></defs>
+        <rect width="1280" height="720" fill="url(#s3sky)"/>
+        <g class="drift" opacity=".6"><g transform="translate(180,120)">${cloudPuffsSVG(140, 30)}</g></g>
+        ${rulerSVG(150, GY, PX, 3)}
+        <path d="M0 ${GY + 4} Q320 ${GY - 20} 640 ${GY + 4} Q960 ${GY + 26} 1280 ${GY} L1280 720 L0 720 Z" fill="#CDE0F2"/>
+        <g id="s3bed"></g>
+        <g id="s3cloud" opacity="0"></g>
+        <text id="s3cloudLab" x="${BX + 150}" y="0" font-size="16" fill="#6E86B8" font-family="Jua" opacity="0"></text>
+        <g id="s3pcl" transform="translate(${BX},${GY - 44})">${parcelSVG('s3pclInner')}</g>
+        <g id="s3mongsil" transform="translate(1080,${GY - 58})"></g>
+        <g id="s3mongsilCloud" transform="translate(1080,${GY - 6})">${cloudPuffsSVG(120, 26, '#FFF', '#D8E0F0')}</g>
+        <text id="s3zzz" x="0" y="0" font-size="24" fill="#8FA8D0" font-family="Jua" opacity="0">z z Z</text>
+      </svg>
+      <div class="ctrl" style="left:14px;bottom:14px;width:min(390px,46vw)">
+        <div class="row"><label>기온 T</label>
+          <input type="range" id="s3T" min="${C.T.min}" max="${C.T.max}" step="1" value="${st.T}">
+          <span class="sVal tCol" id="s3Tv">${st.T} ℃</span></div>
+        <div class="row"><label>이슬점 Td</label>
+          <input type="range" id="s3Td" class="td" min="${C.Td.min}" max="${C.Td.max}" step="1" value="${st.Td}">
+          <span class="sVal tdCol" id="s3Tdv">${st.Td} ℃</span></div>
+        <div class="row" style="justify-content:center;margin-top:8px">
+          <button class="bigBtn" id="s3go">공기 올리기!</button></div>
+      </div>
+      <div class="formulaCard" style="right:14px;bottom:14px;padding-right:88px">
+        H = ⅛ × (T − Td)
+        <small>상승 응결 고도(구름이 생기는 높이)</small>
+        <div style="position:absolute;right:-4px;bottom:-6px;width:84px;height:88px">${charSVG('mungge', 'proud')}</div>
+      </div>
+      <div class="orderCard" style="left:14px;top:76px">
+        <div class="oTag" id="s3RoundTag">주문 1 / 3</div>
+        <div class="oTxt" id="s3Order"></div>
+      </div>`;
+      this.svg = $('s3svg');
+      this.setMongsil('normal');
+      const upd = () => {
+        st.T = +$('s3T').value;
+        st.Td = Math.min(+$('s3Td').value, st.T);
+        if (+$('s3Td').value > st.T) $('s3Td').value = st.T;
+        $('s3Tv').textContent = `${st.T} ℃`; $('s3Tdv').textContent = `${st.Td} ℃`;
+        setMeters(0, st.T, st.Td);
+      };
+      $('s3T').addEventListener('input', upd);
+      $('s3Td').addEventListener('input', upd);
+      $('s3go').addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        if (G.dialogActive || st.mode !== 'idle') return;
+        AudioSys.ensure(); AudioSys.sWhoosh();
+        st.mode = 'rise'; st.alt = 0;
+        $('s3go').disabled = true;
+        $('s3cloud').setAttribute('opacity', 0);
+        $('s3cloudLab').setAttribute('opacity', 0);
+      });
+      upd();
+      Dialog.run([
+        { who: 'mongsil', face: 'normal', text: '냐암… 어서 와. 나는 폭신한 곳에서만 잘 수 있는 몽실이야.' },
+        { who: 'mongsil', face: 'puzzled', text: '침대 프레임은 하늘에 놓아 뒀는데 <b>매트리스(구름)</b>가 없지 뭐야. 딱 저 높이에 구름을 깔아 줄래냥?' },
+        { who: 'mungge', face: 'normal', text: '구름은 <span class="kw">응결 고도 H = ⅛(T − Td)</span>에서 생겨! 지표의 기온·이슬점을 조절하고 공기를 올려 보자.' },
+      ], () => this.startRound(0));
+    },
+    setMongsil(face) { $('s3mongsil').innerHTML = charNested('mongsil', face, -60, -66, 120, 128); },
+    bedY() { return GY - C.targets[st.round] * PX; },
+    startRound(r) {
+      st.round = r; st.mode = 'idle'; st.jump = -1;
+      setMission(r, HINTS[r]);
+      const km = C.targets[r];
+      $('s3RoundTag').textContent = `주문 ${r + 1} / 3`;
+      $('s3Order').innerHTML = `침대 높이 <b>${km.toFixed(1)} km</b>에 폭신 구름 매트리스!`;
+      $('s3go').disabled = false;
+      const y = this.bedY();
+      $('s3bed').innerHTML = `<g transform="translate(${BX},${y})">
+        <line x1="-190" y1="10" x2="1280" y2="10" stroke="#C0A8E0" stroke-width="2" stroke-dasharray="6 9" opacity=".55"/>
+        <rect x="-128" y="0" width="256" height="13" rx="6.5" fill="#E8CBA8" stroke="#C8A478" stroke-width="3"/>
+        <rect x="-140" y="-52" width="14" height="66" rx="7" fill="#E8CBA8" stroke="#C8A478" stroke-width="3"/>
+        <rect x="126" y="-36" width="14" height="50" rx="7" fill="#E8CBA8" stroke="#C8A478" stroke-width="3"/>
+        <rect x="-118" y="-20" width="56" height="18" rx="9" fill="#F6F2FF" stroke="#CFC4E8" stroke-width="2.5"/>
+        <text x="176" y="-18" font-size="15" fill="#8A6FB8" font-family="Jua">↖ ${km.toFixed(1)} km 침대</text>
+      </g>`;
+      $('s3zzz').setAttribute('opacity', 0);
+      this.setMongsil('normal');
+      $('s3mongsil').setAttribute('transform', `translate(1080,${GY - 58})`);
+      $('s3mongsilCloud').setAttribute('opacity', 1);
+      $('s3pcl').setAttribute('opacity', 1);
+    },
+    tick(dt) {
+      const H = lclHeight(st.T, st.Td);
+      if (st.mode === 'rise') {
+        st.alt += dt * 1.15;
+        const capped = Math.min(H, C.maxKm + 0.15);
+        if (st.alt >= capped) { st.alt = capped; this.arrive(H); }
+      } else if (st.mode === 'idle') {
+        st.alt = Math.max(0, st.alt - dt * 2.2);
+      }
+      const s = riseState(st.T, st.Td, Math.min(st.alt, H));
+      if (st.mode === 'rise') setMeters(st.alt, s.T, s.Td);
+      const g = $('s3pcl'); if (!g) return;
+      g.setAttribute('transform', `translate(${BX},${GY - 44 - st.alt * PX}) scale(${(1 + 0.13 * st.alt).toFixed(3)})`);
+      // 몽실이 폴짝 점프 연출
+      if (st.jump >= 0) {
+        st.jump = Math.min(1, st.jump + dt * 1.1);
+        const t = st.jump, y0 = GY - 58, y1 = this.bedY() - 34;
+        const x = lerp(1080, BX + 20, t);
+        const y = lerp(y0, y1, t) - Math.sin(t * Math.PI) * 130;
+        $('s3mongsil').setAttribute('transform', `translate(${x.toFixed(0)},${y.toFixed(0)})`);
+        if (st.jump >= 1 && !this.slept) {
+          this.slept = true;
+          this.setMongsil('sleep');
+          $('s3zzz').setAttribute('x', BX + 90); $('s3zzz').setAttribute('y', this.bedY() - 60);
+          $('s3zzz').setAttribute('opacity', 1);
+          AudioSys.sHeart();
+        }
+      }
+    },
+    arrive(H) {
+      st.mode = 'judge';
+      const target = C.targets[st.round];
+      const okHeight = H <= C.maxKm && Math.abs(H - target) <= C.tolKm;
+      if (H <= C.maxKm) {
+        const y = GY - H * PX;
+        $('s3cloud').innerHTML = `<g transform="translate(${BX},${y})">${cloudPuffsSVG(250, 36)}</g>`;
+        $('s3cloud').setAttribute('opacity', 1);
+        $('s3cloudLab').textContent = `구름 바닥 ${fmt2(H)} km`;
+        $('s3cloudLab').setAttribute('y', y - 44);
+        $('s3cloudLab').setAttribute('opacity', 1);
+        $('s3pcl').setAttribute('opacity', 0);
+        AudioSys.sCondense();
+      }
+      setTimeout(() => {
+        if (okHeight) this.success();
+        else {
+          if (H > C.maxKm) flub(2, '공기가 너무 건조해서 하늘 끝까지 구름이 안 생겼어!');
+          else flub(2, `구름이 ${fmt2(H)} km에 생겼네. 주문은 ${target.toFixed(1)} km! ${H > target ? '조금 낮게' : '조금 높게'} 만들어 보자.`);
+          this.setMongsil('puzzled');
+          setTimeout(() => {
+            $('s3cloud').setAttribute('opacity', 0);
+            $('s3cloudLab').setAttribute('opacity', 0);
+            $('s3pcl').setAttribute('opacity', 1);
+            st.mode = 'idle'; $('s3go').disabled = false;
+            this.setMongsil('normal');
+          }, 900);
+        }
+      }, 550);
+    },
+    success() {
+      const r = st.round;
+      this.slept = false; st.jump = 0;
+      $('s3mongsilCloud').setAttribute('opacity', 0);
+      this.setMongsil('wow');
+      const p = svgToScreen(this.svg, BX, this.bedY());
+      FX.burst(p.x, p.y, '#CBAEE8', 18);
+      celebrate(2, r, () => {
+        if (r < 2) {
+          Dialog.run([{ who: 'mongsil', face: 'happy',
+            text: r === 0 ? '냐아~ 폭신폭신 완벽해! …그런데 <b>더 높은 곳</b> 침대도 부탁할게. 경치가 좋거든!'
+                          : '몽실몽실 최고야! 마지막으로 <b>중간 높이</b> 침대 하나만 더~' }],
+            () => this.startRound(r + 1));
+        } else {
+          Dialog.run([
+            { who: 'mongsil', face: 'sleep', text: '쿨쿨… 냐암… (구름 침대에서 세상에서 제일 행복한 얼굴로 잠들었다)' },
+            { who: 'mungge', face: 'happy', text: '<span class="kw">T와 Td의 차이 × ⅛ = 구름의 높이</span>. 이제 구름이 어디 생길지 예언할 수 있겠지?' },
+          ], () => stageComplete(2));
+        }
+      });
+    },
+  };
+};
+
+/* ============================================================
+   S4 — 도토리의 바람 배달 (푄: 산 넘기 드래그 + 주문 역산)
+   ============================================================ */
+STAGE_BUILDERS[3] = function () {
+  const C = TUNING.s4;
+  const GY = 600, PX = 145;
+  const XL = 250, XP = 640, XR = 1030;    // 산자락·정상·산자락 x
+  const X0 = 150, XD = 1150;              // 출발·배달 완료 x
+  const st = { T: C.T.init, Td: C.Td.init, mtn: C.mtn.init,
+               x: X0, targetX: X0, held: false, locked: true,
+               passedPeak: false, condensed: false, top: null, order: 0, delivered: false };
+  const HINTS = [
+    ['산을 넘은 바람은 <b>더 따뜻해져</b>! 오를 땐 응결 후 −5 ℃/km로 천천히 식고, 내릴 땐 +10 ℃/km로 데워지니까.',
+     '예를 들어 기온 20 ℃ · 이슬점 14 ℃ · 산 2 km면… 도착 온도가 <b>26.25 ℃</b>가 돼!'],
+    ['비(구름)는 <b>응결 고도 H</b>부터 생겨. H가 산꼭대기보다 높으면 비가 안 와!',
+     '<b>H = ⅛(T−Td) ≥ 산 높이</b>로! T−Td를 크게 벌리거나, 산을 낮게 해 봐.'],
+    ['도착 온도가 올라가는 양은 <b>(산 높이 − H)</b>에 비례해. H가 낮을수록, 산이 높을수록 뜨겁고 건조!',
+     '산 높이 <b>3 km</b> + 이슬점을 <b>기온 − 1 ℃</b>로! H가 최소가 되어 가장 뜨겁고 건조한 바람이 돼.'],
+  ];
+  const ORDERS = [
+    `친척집에 딱 <b>26 ℃</b> 바람 배달! (±0.5 ℃)`,
+    `이번엔 <b>비를 한 방울도 안 뿌리고</b> 넘어와 줘!`,
+    `<b>가장 뜨겁고 건조한</b> 바람으로 부탁해! (산 최대 + Td = T−1)`,
+  ];
+  const terrainAlt = x => {
+    if (x <= XL || x >= XR) return 0;
+    return x < XP ? (x - XL) / (XP - XL) * st.mtn : (XR - x) / (XR - XP) * st.mtn;
+  };
+  return {
+    build() {
+      $('scene').innerHTML = `
+      <svg class="full" id="s4svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s4sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#9CC8EC"/><stop offset=".6" stop-color="#D8EAF8"/><stop offset="1" stop-color="#FBEBD8"/>
+        </linearGradient></defs>
+        <rect width="1280" height="720" fill="url(#s4sky)"/>
+        <path d="M0 ${GY} H1280 V720 H0 Z" fill="#C2E0BC"/>
+        <line id="s4Hline" x1="60" x2="1220" stroke="#8FB8DC" stroke-width="2.5" stroke-dasharray="8 7"/>
+        <text id="s4Hlab" x="66" font-size="14" fill="#6E86B8" font-family="Jua"></text>
+        <g id="s4mtn"></g>
+        <g transform="translate(120,${GY})">
+          <rect x="-34" y="-52" width="68" height="52" rx="10" fill="#FBDBB4" stroke="#E8B478" stroke-width="3"/>
+          <path d="M-40 -48 L0 -82 L40 -48 Z" fill="#E8B478" stroke="#D09850" stroke-width="3" stroke-linejoin="round"/>
+          <text x="0" y="22" text-anchor="middle" font-size="14" fill="#8A6A52" font-family="Jua">출발 마을</text>
+        </g>
+        <g transform="translate(1160,${GY})">
+          <rect x="-36" y="-56" width="72" height="56" rx="10" fill="#F5D9B8" stroke="#DBAE78" stroke-width="3"/>
+          <path d="M-42 -52 L0 -88 L42 -52 Z" fill="#DBAE78" stroke="#C09456" stroke-width="3" stroke-linejoin="round"/>
+          <circle cx="0" cy="-30" r="9" fill="#FFFDF6" stroke="#DBAE78" stroke-width="2.5"/>
+          <text x="0" y="22" text-anchor="middle" font-size="14" fill="#8A6A52" font-family="Jua">친척집</text>
+        </g>
+        <g id="s4rain" opacity="0">${[0,1,2,3,4,5].map(i =>
+          `<line x1="${-30 + i * 12}" y1="${i % 2 * 14}" x2="${-36 + i * 12}" y2="${26 + i % 2 * 14}" stroke="#7EB2E4" stroke-width="3.4" stroke-linecap="round"/>`).join('')}</g>
+        <g id="s4cloud" opacity="0">${cloudPuffsSVG(120, 26)}</g>
+        <g id="s4pcl">${parcelSVG('s4pclInner')}</g>
+        <g id="s4dotori" transform="translate(1075,${GY - 46})"></g>
+        <text id="s4tip" x="${X0}" y="${GY - 120}" text-anchor="middle" font-size="18" fill="#7FA8C8" font-family="Jua" class="bob" style="transform-box:fill-box">◀ 잡고 산 너머로! ▶</text>
+      </svg>
+      <div class="orderCard" style="left:14px;top:76px">
+        <div class="oTag" id="s4OrderTag">주문서 1 / 3</div>
+        <div class="oTxt" id="s4Order"></div>
+      </div>
+      <div class="ctrl" style="left:50%;transform:translateX(-50%);bottom:14px;width:min(430px,46vw)">
+        <div class="row"><label>출발 기온</label>
+          <input type="range" id="s4T" min="${C.T.min}" max="${C.T.max}" step="1" value="${st.T}">
+          <span class="sVal tCol" id="s4Tv">${st.T} ℃</span></div>
+        <div class="row"><label>출발 이슬점</label>
+          <input type="range" id="s4Td" class="td" min="${C.Td.min}" max="${C.Td.max}" step="1" value="${st.Td}">
+          <span class="sVal tdCol" id="s4Tdv">${st.Td} ℃</span></div>
+        <div class="row"><label>산 높이</label>
+          <input type="range" id="s4M" class="gm" min="${C.mtn.min}" max="${C.mtn.max}" step="${C.mtn.step}" value="${st.mtn}">
+          <span class="sVal gCol" id="s4Mv">${st.mtn.toFixed(1)} km</span></div>
+        <div class="row" style="justify-content:center">
+          <button class="chip" id="s4reset">↺ 출발점으로</button></div>
+      </div>`;
+      this.svg = $('s4svg');
+      this.setDotori('normal');
+      const upd = () => {
+        st.T = +$('s4T').value;
+        st.Td = Math.min(+$('s4Td').value, st.T - 1);
+        if (+$('s4Td').value > st.T - 1) $('s4Td').value = st.Td;
+        st.mtn = +$('s4M').value;
+        $('s4Tv').textContent = `${st.T} ℃`; $('s4Tdv').textContent = `${st.Td} ℃`;
+        $('s4Mv').textContent = `${st.mtn.toFixed(1)} km`;
+        this.resetParcel();
+        this.drawMtn();
+      };
+      ['s4T', 's4Td', 's4M'].forEach(id => $(id).addEventListener('input', upd));
+      $('s4reset').addEventListener('pointerdown', e => { e.stopPropagation(); AudioSys.sPop(); this.resetParcel(); });
+      // 가로 드래그 (산 넘기)
+      const moveTo = e => {
+        const p = svgPt(this.svg, e);
+        let nx = clamp(p.x, X0, XD + 20);
+        if (st.passedPeak) nx = Math.max(nx, XP);   // 배달은 앞으로만!
+        st.targetX = nx;
+      };
+      const pcl = $('s4pcl');
+      pcl.addEventListener('pointerdown', e => {
+        if (G.dialogActive || st.locked) return;
+        e.preventDefault(); e.stopPropagation();
+        st.held = true; pcl.setPointerCapture(e.pointerId); moveTo(e);
+      });
+      pcl.addEventListener('pointermove', e => { if (st.held) moveTo(e); });
+      pcl.addEventListener('pointerup', () => { st.held = false; });
+      pcl.addEventListener('pointercancel', () => { st.held = false; });
+      this.drawMtn();
+      Dialog.run([
+        { who: 'dotori', face: 'happy', text: '어서 와! 하늘마을 배달부 도토리야. 오늘은 <b>바람 배달</b> 주문이 밀렸어~' },
+        { who: 'dotori', face: 'normal', text: '산 너머 친척집까지 공기를 배달해 줘! 주문서 조건이 좀 까다로울 거야.' },
+        { who: 'mungge', face: 'normal', text: '산을 오를 땐 <span class="kw">응결되면 −5 ℃/km</span>, 내려갈 땐 <span class="kw">+10 ℃/km</span>. 그래서 산을 넘으면 바람의 성격이 변해!' },
+      ], () => this.startOrder(0));
+    },
+    setDotori(face) { $('s4dotori').innerHTML = charNested('dotori', face, -64, -70, 128, 136); },
+    drawMtn() {
+      const py = GY - st.mtn * PX;
+      $('s4mtn').innerHTML = `
+        <path d="M${XL} ${GY} L${XP} ${py} L${XR} ${GY} Z" fill="#B8D0E8" stroke="#9CB8D8" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M${XP - 62} ${py + 62 * st.mtn * PX / (XP - XL)} L${XP} ${py} L${XP + 62} ${py + 62 * st.mtn * PX / (XR - XP)} L${XP + 30} ${py + 34} Q${XP} ${py + 20} ${XP - 30} ${py + 34} Z" fill="#FFF" opacity=".9"/>
+        <text x="${XP}" y="${py - 16}" text-anchor="middle" font-size="15" fill="#7A94B8" font-family="Jua">${st.mtn.toFixed(1)} km</text>`;
+      const H = lclHeight(st.T, st.Td);
+      const hl = $('s4Hline'), hlab = $('s4Hlab');
+      if (H <= 3.5) {
+        const y = GY - H * PX;
+        hl.setAttribute('y1', y); hl.setAttribute('y2', y); hl.setAttribute('opacity', 1);
+        hlab.setAttribute('y', y - 7); hlab.setAttribute('opacity', 1);
+        hlab.textContent = `응결 고도 H = ${fmt2(H)} km ${H >= st.mtn ? '(산보다 높음 → 비 없음!)' : ''}`;
+      } else { hl.setAttribute('opacity', 0); hlab.setAttribute('opacity', 0); }
+    },
+    resetParcel() {
+      st.x = st.targetX = X0; st.passedPeak = false; st.condensed = false;
+      st.top = null; st.delivered = false; st.held = false;
+    },
+    startOrder(k) {
+      st.order = k;
+      setMission(k, HINTS[k]);
+      $('s4OrderTag').textContent = `주문서 ${k + 1} / 3`;
+      $('s4Order').innerHTML = ORDERS[k];
+      st.locked = false;
+      this.resetParcel();
+    },
+    // 현재 위치의 공기 상태
+    airState() {
+      const alt = terrainAlt(st.x);
+      if (!st.passedPeak) return Object.assign({ alt }, riseState(st.T, st.Td, alt));
+      const d = descendFrom(st.top.T, st.top.Td, st.mtn, alt);
+      return { alt, T: d.T, Td: d.Td, saturated: false };
+    },
+    tick(dt) {
+      st.x += (st.targetX - st.x) * Math.min(1, dt * 8);
+      if (!st.passedPeak && st.x >= XP - 1) {
+        st.passedPeak = true;
+        st.top = riseState(st.T, st.Td, st.mtn);
+        AudioSys.sWhoosh();
+      }
+      const s = this.airState();
+      if (s.saturated) st.condensed = true;
+      setMeters(s.alt, s.T, s.Td);
+      const y = GY - s.alt * PX - 42;
+      const g = $('s4pcl'); if (!g) return;
+      g.setAttribute('transform', `translate(${st.x.toFixed(0)},${y.toFixed(0)}) scale(${(1 + 0.12 * s.alt).toFixed(3)})`);
+      $('s4tip').style.opacity = st.x > X0 + 60 ? 0 : 1;
+      // 구름 + 비 연출 (풍상측 포화 구간)
+      const cloudy = !st.passedPeak && s.saturated;
+      $('s4cloud').setAttribute('opacity', cloudy ? 1 : 0);
+      $('s4rain').setAttribute('opacity', cloudy ? 1 : 0);
+      if (cloudy) {
+        $('s4cloud').setAttribute('transform', `translate(${st.x.toFixed(0)},${(y - 54).toFixed(0)})`);
+        $('s4rain').setAttribute('transform', `translate(${st.x.toFixed(0)},${(y + 40).toFixed(0)})`);
+        if (Math.random() < dt * 2.2) AudioSys.sRain();
+      }
+      // 배달 완료 판정
+      if (!st.delivered && !st.locked && st.x >= XD - 6 && s.alt < 0.02 && !G.dialogActive) {
+        st.delivered = true; st.locked = true; st.held = false;
+        this.judge(s);
+      }
+    },
+    judge(s) {
+      const k = st.order;
+      let ok = false, failMsg = '';
+      if (k === 0) {
+        ok = Math.abs(s.T - C.o1Target) <= C.o1Tol;
+        failMsg = `도착 온도 <b>${fmt1(s.T)} ℃</b>… 주문은 26 ℃(±0.5)! 출발 조건을 바꿔서 다시~`;
+      } else if (k === 1) {
+        ok = !st.condensed;
+        failMsg = st.condensed ? '앗, 산을 오르다 비가 주룩주룩 왔어! 응결 고도를 산보다 높게 만들어 봐.'
+                               : '';
+      } else {
+        ok = st.mtn >= C.o3Mtn - 0.01 && (st.T - st.Td) <= C.o3Gap + 0.01 && st.condensed;
+        failMsg = `더 뜨겁고 건조하게! 도착 ${fmt1(s.T)} ℃로는 부족해~ 산을 더 높이, 이슬점은 기온 바로 아래로!`;
+      }
+      if (ok) {
+        this.setDotori('wow');
+        const p = svgToScreen(this.svg, 1160, GY - 80);
+        FX.burst(p.x, p.y, '#F7C154', 18);
+        AudioSys.sStamp();
+        celebrate(3, k, () => {
+          if (k < 2) {
+            Dialog.run([{ who: 'dotori', face: 'happy',
+              text: k === 0 ? '도장 쾅! 소포를 열어 보니… 딱 좋은 <b>따끈한 바람</b>! 친척이 기뻐하겠다~ 다음 주문!'
+                            : '도장 쾅쾅! 뽀송뽀송하게 도착했어. <b>구름 한 점 없이!</b> 자, 마지막 주문은 좀 어려워~' }],
+              () => this.startOrder(k + 1));
+          } else {
+            Dialog.run([
+              { who: 'dotori', face: 'wow', text: '도장 쾅쾅쾅!! 후끈후끈 바싹바싹… 이게 바로 전설의 <b>높새바람</b>이구나!' },
+              { who: 'mungge', face: 'proud', text: '산을 넘은 바람이 뜨겁고 건조해지는 것, 이게 <span class="kw">푄 현상</span>이야. 배달 완벽했어!' },
+            ], () => stageComplete(3));
+          }
+        });
+      } else {
+        this.setDotori('puzzled');
+        flub(3, failMsg);
+        setTimeout(() => { this.resetParcel(); st.locked = false; this.setDotori('normal'); }, 1100);
+      }
+    },
+  };
+};
+</script>
+<script>
+'use strict';
+/* ============================================================
+   S5 — 부엉이 박사의 하늘 감정사 시험 (대기 안정도 · 부력)
+   ============================================================ */
+STAGE_BUILDERS[4] = function () {
+  const C = TUNING.s5;
+  const GY = 600, TOPY = 96, PX = (GY - TOPY) / C.topKm, X = 560;
+  const H = lclHeight(C.T0, C.Td0);  // 1.0 km
+  const st = { gamma: 8, mode: 'idle', alt: 0, v: 0, target: 0, freeT: 0,
+               condensed: false, lastPush: 0, exam: 0, streak: 0, skyPlan: [], busy: false, lockG: true };
+  const HINTS = [
+    ['공기를 살짝 찔러 보고 <b>되돌아오는지, 계속 오르는지</b> 관찰해 봐!',
+     '숫자만 봐도 알 수 있어~ <b>γ<5 절대 안정 · γ>10 절대 불안정 · 그 사이 조건부</b>!'],
+    ['층운은 <b>안정한 하늘 + 강제 상승</b>에서 생겨. γ를 5보다 작게 해 보자!',
+     'γ를 <b>5 미만</b>으로 두고 <b>세게 밀어올리기</b>! 응결된 채 되돌아와 옆으로 퍼지면 층운이야.'],
+    ['조건부 불안정(5~10)은 <b>세게 밀어주면</b> 어느 높이부터 스스로 올라가!',
+     'γ를 <b>8~10</b>으로 두고 세게 밀어올려 봐. 2 km에서 덩어리가 주위보다 따뜻해지면 자유 상승!'],
+  ];
+  return {
+    build() {
+      $('scene').innerHTML = `
+      <svg class="full" id="s5svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s5sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8FB4E0"/><stop offset=".55" stop-color="#CFE2F4"/><stop offset="1" stop-color="#F2E9DC"/>
+        </linearGradient></defs>
+        <rect width="1280" height="720" fill="url(#s5sky)"/>
+        ${rulerSVG(150, GY, PX, 3)}
+        ${[0, 1, 2, 3].map(k => `<g transform="translate(238,${GY - k * PX})">
+          <rect x="-46" y="-15" width="92" height="30" rx="14" fill="rgba(255,251,243,.85)" stroke="#E9CDB4" stroke-width="2"/>
+          <text id="s5e${k}" y="6" text-anchor="middle" font-size="15.5" fill="#7A6152" font-family="Jua"></text></g>`).join('')}
+        <text x="238" y="${GY - 3 * PX - 28}" text-anchor="middle" font-size="14" fill="#8898B8" font-family="Jua">주위(환경) 기온</text>
+        <line x1="300" y1="${GY - H * PX}" x2="1240" y2="${GY - H * PX}" stroke="#8FB8DC" stroke-width="2.5" stroke-dasharray="8 7" opacity=".7"/>
+        <text x="1234" y="${GY - H * PX - 7}" text-anchor="end" font-size="14" fill="#6E86B8" font-family="Jua">응결 고도 1 km</text>
+        <path d="M0 ${GY + 2} Q320 ${GY - 18} 640 ${GY + 4} Q960 ${GY + 22} 1280 ${GY - 2} L1280 720 L0 720 Z" fill="#C8D8E8"/>
+        <g id="s5cloudS" opacity="0"></g>
+        <g id="s5cloudC" opacity="0"></g>
+        <g id="s5pcl" transform="translate(${X},${GY - 42})">${parcelSVG('s5pclInner')}</g>
+        <g id="s5baksa" transform="translate(1080,${GY - 52})"></g>
+      </svg>
+      <div class="orderCard" style="left:14px;top:76px;max-width:390px">
+        <div class="oTag" id="s5Tag">시험 1 / 3 — 감정 시험</div>
+        <div class="oTxt" id="s5Order"></div>
+      </div>
+      <div class="ctrl" style="left:14px;bottom:14px;width:min(430px,48vw)">
+        <div class="row"><label>기온 감률 γ</label>
+          <input type="range" id="s5g" class="gm" min="3" max="12" step="0.1" value="8">
+          <span class="sVal gCol" id="s5gv">8.0 ℃/km</span></div>
+        <div class="row">
+          <button class="chip" data-g="4">안정 4</button>
+          <button class="chip" data-g="8">중간 8</button>
+          <button class="chip" data-g="12">불안정 12</button>
+          <span id="s5stab" style="font-size:14px;color:#9A78C8;margin-left:auto"></span></div>
+        <div class="row" style="justify-content:center;gap:12px;margin-top:6px">
+          <button class="bigBtn" id="s5poke" style="font-size:17px;padding:9px 16px">쿡 찔러보기 (0.5 km)</button>
+          <button class="bigBtn orange" id="s5push" style="font-size:17px;padding:9px 16px">세게 밀어올리기 (2 km)</button></div>
+      </div>
+      <div class="ctrl" style="right:14px;bottom:14px;pointer-events:none;min-width:250px;text-align:center">
+        <div style="font-size:13px;color:#A98D77">덩어리 vs 주위 (같은 높이)</div>
+        <div id="s5cmp" style="font-size:19px;color:#5F4B41;margin-top:3px">지표에서 대기 중…</div>
+      </div>
+      <div id="s5cards" class="vRow" style="position:absolute;left:50%;bottom:170px;transform:translateX(-50%);z-index:22;display:none">
+        <button class="vCard" data-v="stable"><span class="vIcon">γ &lt; 5</span>절대 안정</button>
+        <button class="vCard" data-v="conditional"><span class="vIcon">5 ~ 10</span>조건부 불안정</button>
+        <button class="vCard" data-v="unstable"><span class="vIcon">γ &gt; 10</span>절대 불안정</button>
+      </div>`;
+      this.svg = $('s5svg');
+      this.setBaksa('normal');
+      const setG = v => {
+        st.gamma = clamp(Math.round(v * 10) / 10, 3, 12);
+        $('s5g').value = st.gamma;
+        $('s5gv').textContent = `${st.gamma.toFixed(1)} ℃/km`;
+        const sName = { stable: '절대 안정', conditional: '조건부 불안정', unstable: '절대 불안정' }[stability(st.gamma)];
+        $('s5stab').textContent = st.exam === 0 ? '' : sName;   // 감정 시험 중엔 정답 숨김
+        this.envLabels();
+      };
+      this.setG = setG;
+      $('s5g').addEventListener('input', () => { if (!st.lockG) setG(+$('s5g').value); else { $('s5g').value = st.gamma; toast('감정 시험 중엔 하늘(γ)이 정해져 있어!', false, 1400); } });
+      document.querySelectorAll('#scene .chip[data-g]').forEach(ch =>
+        ch.addEventListener('pointerdown', e => { e.stopPropagation(); if (st.lockG) { toast('감정 시험 중엔 하늘(γ)이 정해져 있어!', false, 1400); return; } AudioSys.sPop(); setG(+ch.dataset.g); }));
+      $('s5poke').addEventListener('pointerdown', e => { e.stopPropagation(); this.launch(C.pokeKm); });
+      $('s5push').addEventListener('pointerdown', e => { e.stopPropagation(); this.launch(C.pushKm); });
+      $('s5cards').querySelectorAll('.vCard').forEach(c =>
+        c.addEventListener('pointerdown', e => { e.stopPropagation(); this.verdict(c.dataset.v); }));
+      setG(8);
+      Dialog.run([
+        { who: 'baksa', face: 'normal', text: '홋홋, 잘 왔다. 나는 하늘의 성격을 감정하는 부엉이 박사란다.' },
+        { who: 'baksa', face: 'proud', text: '오늘 너에게 <b>하늘 감정사 시험</b>을 보게 해 주지. 시험은 세 과목이야.' },
+        { who: 'mungge', face: 'normal', text: '핵심 규칙! 공기 덩어리가 <span class="kw">같은 높이의 주위보다 따뜻하면 스스로 상승</span>, 차가우면 되돌아와!' },
+      ], () => this.startExam(0));
+    },
+    setBaksa(face) { $('s5baksa').innerHTML = charNested('baksa', face, -66, -72, 132, 140); },
+    envLabels() { [0, 1, 2, 3].forEach(k => { const el = $('s5e' + k); if (el) el.textContent = `${fmt1(envTemp(C.T0, st.gamma, k))} ℃`; }); },
+    startExam(n) {
+      st.exam = n;
+      setMission(n, HINTS[n]);
+      this.clearClouds();
+      if (n === 0) {
+        st.lockG = true; st.streak = 0;
+        st.skyPlan = shuffle(['stable', 'conditional', 'unstable']);
+        $('s5Tag').textContent = '시험 1 / 3 — 감정 시험';
+        $('s5cards').style.display = 'flex';
+        this.nextSky();
+      } else {
+        st.lockG = false;
+        $('s5cards').style.display = 'none';
+        $('s5Tag').textContent = n === 1 ? '시험 2 / 3 — 설계 시험' : '시험 3 / 3 — 비전(祕傳) 시험';
+        $('s5Order').innerHTML = n === 1
+          ? 'γ를 조절해 <b>층운형 구름이 생기는 하늘</b>을 만들어 보렴. (만들고 세게 밀어올리기!)'
+          : '<b>조건부 불안정</b> 하늘에서 <b>적운</b>을 피워 보렴. (세게 밀어 자유 상승!)';
+        this.setG(st.gamma);
+      }
+    },
+    nextSky() {
+      const cat = st.skyPlan[st.streak % 3];
+      this.setG(pick(C.pools[cat]));
+      $('s5Order').innerHTML = `오늘의 하늘 <b>#${st.streak + 1}</b> — γ = <b>${st.gamma.toFixed(1)} ℃/km</b>. 찔러 보고 판정패를 골라라! (연속 ${st.streak}/3)`;
+      this.clearClouds();
+    },
+    launch(h) {
+      if (G.dialogActive || st.busy) return;
+      AudioSys.ensure(); AudioSys.sWhoosh();
+      st.busy = true; st.mode = 'forced'; st.target = h; st.lastPush = h;
+      st.condensed = false; st.freeT = 0;
+      this.clearClouds();
+    },
+    clearClouds() {
+      $('s5cloudS').setAttribute('opacity', 0);
+      $('s5cloudC').setAttribute('opacity', 0);
+    },
+    verdict(v) {
+      if (G.dialogActive || st.exam !== 0) return;
+      AudioSys.sPop();
+      if (v === stability(st.gamma)) {
+        st.streak++;
+        AudioSys.sSparkle();
+        if (st.streak >= 3) {
+          $('s5cards').style.display = 'none';
+          this.setBaksa('wow');
+          celebrate(4, 0, () => Dialog.run([
+            { who: 'baksa', face: 'happy', text: '3연속 정답! 훌륭한 눈썰미다. 다음은 <b>설계 시험</b>이야.' },
+          ], () => this.startExam(1)));
+        } else {
+          toast(`정답! 다음 하늘 감정 (${st.streak}/3)`, true, 1400);
+          this.setBaksa('happy');
+          setTimeout(() => { this.setBaksa('normal'); this.nextSky(); }, 700);
+        }
+      } else {
+        st.streak = 0;
+        st.skyPlan = shuffle(['stable', 'conditional', 'unstable']);
+        this.setBaksa('puzzled');
+        flub(4, '갸우뚱… γ 숫자를 5와 10에 견주어 보렴. 처음부터 다시!');
+        setTimeout(() => { this.setBaksa('normal'); this.nextSky(); }, 900);
+      }
+    },
+    tick(dt) {
+      if (st.mode === 'forced') {
+        st.alt = Math.min(st.target, st.alt + dt * 1.9);
+        if (st.alt >= st.target - 0.001) { st.mode = 'free'; st.v = 0; st.freeT = 0; }
+      } else if (st.mode === 'free') {
+        const Tp = riseState(C.T0, C.Td0, st.alt).T;
+        const Te = envTemp(C.T0, st.gamma, st.alt);
+        st.v += C.buoyK * (Tp - Te) * dt;
+        st.v *= Math.pow(C.damp, dt * 60);
+        st.alt += st.v * dt;
+        st.freeT += dt;
+        if (st.alt >= H) st.condensed = true;
+        if (st.alt >= C.topKm) { st.alt = C.topKm; st.mode = 'idle'; this.outcome('escape'); }
+        else if (st.alt <= 0) {
+          st.alt = 0;
+          if (Math.abs(st.v) < 0.25) { st.mode = 'idle'; this.outcome('ground'); }
+          else { st.v = -st.v * 0.3; AudioSys.sPop(); }
+        } else if (st.freeT > 8) { st.mode = 'idle'; this.outcome('mid'); }
+      }
+      const s = riseState(C.T0, C.Td0, st.alt);
+      setMeters(st.alt, s.T, s.Td);
+      const g = $('s5pcl'); if (!g) return;
+      g.setAttribute('transform', `translate(${X},${GY - 42 - st.alt * PX}) scale(${(1 + 0.13 * st.alt).toFixed(3)})`);
+      // 실시간 비교 표시
+      const Tp = s.T, Te = envTemp(C.T0, st.gamma, st.alt);
+      const d = Tp - Te;
+      $('s5cmp').innerHTML = st.alt < 0.03 && st.mode === 'idle'
+        ? '지표에서 대기 중…'
+        : `<b style="color:#D97F62">${fmt1(Tp)} ℃</b> vs <b style="color:#6E86B8">${fmt1(Te)} ℃</b><br>
+           <span style="font-size:15px;color:${d > 0.05 ? '#4E9A6E' : d < -0.05 ? '#7A8AA8' : '#A98D77'}">
+           ${d > 0.05 ? '덩어리가 더 따뜻해 → 둥실 상승! ↑' : d < -0.05 ? '덩어리가 더 차가워 → 가라앉음 ↓' : '주위와 비슷해 (중립)'}</span>`;
+    },
+    outcome(kind) {
+      st.busy = false;
+      if (kind === 'escape') {
+        // 적운 뭉게뭉게
+        $('s5cloudC').innerHTML = [0, 1, 2, 3].map(i =>
+          `<g transform="translate(${X + (i % 2 ? 26 : -20)},${GY - (H + 0.55 + i * 0.55) * PX})">${cloudPuffsSVG(150 + i * 26, 34 + i * 5)}</g>`).join('');
+        $('s5cloudC').setAttribute('opacity', 1);
+        AudioSys.sCondense();
+        setTimeout(() => { st.alt = 0; st.v = 0; }, 600);
+      } else if (kind === 'ground' && st.condensed && st.lastPush >= C.pushKm) {
+        // 되돌아오며 응결 → 층운이 옆으로 얇게
+        $('s5cloudS').innerHTML = `<g transform="translate(640,${GY - H * PX})">${cloudPuffsSVG(600, 26)}</g>`;
+        $('s5cloudS').setAttribute('opacity', 1);
+      }
+      if (G.dialogActive) return;
+      if (st.exam === 1 && st.lastPush >= C.pushKm) {
+        if (kind === 'ground' && st.condensed && stability(st.gamma) === 'stable') {
+          this.setBaksa('wow');
+          celebrate(4, 1, () => Dialog.run([
+            { who: 'baksa', face: 'happy', text: '보아라, 얇고 넓게 퍼진 <b>층운</b>! 안정한 하늘은 상승을 눌러 되돌리니 옆으로 퍼질 수밖에. 합격!' },
+          ], () => this.startExam(2)));
+        } else if (kind === 'escape') {
+          flub(4, '뭉게뭉게 위로 솟았네? 그건 적운이야! 층운은 안정(γ<5)한 하늘에서~');
+        } else if (kind === 'ground') {
+          flub(4, '구름이 만들어졌지만… 이 하늘은 절대 안정이 아니었어. γ를 5보다 작게!');
+        }
+      } else if (st.exam === 2 && st.lastPush >= C.pushKm) {
+        if (kind === 'escape') {
+          if (stability(st.gamma) === 'conditional') {
+            this.setBaksa('wow');
+            celebrate(4, 2, () => Dialog.run([
+              { who: 'baksa', face: 'wow', text: '오오… <b>조건부 불안정</b> 하늘에서 한 번의 강한 상승으로 적운을 피워 냈구나. 비전 전수 완료!' },
+              { who: 'baksa', face: 'proud', text: '그대를 <b>하늘 감정사</b>로 임명한다! 📜 (자격증 수여) 홋홋, 자랑스럽구나.' },
+              { who: 'mungge', face: 'happy', text: '조건부 하늘은 <span class="kw">세게 밀어줘야 본색</span>이 나와. 그래서 「조건부」야!' },
+            ], () => stageComplete(4)));
+          } else {
+            flub(4, '자유 상승은 성공! 하지만 이 하늘은 절대 불안정(γ>10)이야. 비전은 조건부(5~10)에서!');
+          }
+        } else if (kind === 'ground') {
+          flub(4, '음~ 되돌아와 버렸네. 조건부라도 γ가 작으면 2 km론 부족해. γ를 8~10으로 키워 볼까?');
+        }
+      }
+    },
+  };
+};
+
+/* ============================================================
+   S6 — 뭉뭉이의 잔치 준비 (γ·T·Td 종합 — 구름 주문 제작)
+   ============================================================ */
+STAGE_BUILDERS[5] = function () {
+  const C = TUNING.s6;
+  const GY = 592, TOPY = 96, PX = (GY - TOPY) / 3.2, X = 520;
+  const st = { g: C.g.init, T: C.T.init, Td: C.Td.init, mode: 'idle', alt: 0, order: 0, drift: -1 };
+  const ORDERS = [
+    '주문 ① 얇고 넓은 <b>층운 카펫</b> 부탁!',
+    '주문 ② 크고 몽실한 <b>적운 풍선</b>!',
+    '주문 ③ (특급) 정확히 <b>2 km 높이에 적운</b>! (구름 바닥 2±0.1 km)',
+  ];
+  const HINTS = [
+    ['S5에서 배운 것! 층운 = <b>안정한 하늘(γ<5) + 강제 상승 + 응결</b>.',
+     'γ를 <b>5 미만</b>으로, 그리고 응결되도록 T−Td를 작게(24 미만)! 버튼을 누르면 공기가 밀려 올라가.'],
+    ['적운 = 밀어 올린 덩어리가 <b>주위보다 따뜻해져 스스로 오르는</b> 하늘!',
+     'γ를 크게! <b>10 초과</b>면 확실해. 응결도 되어야 하니 T−Td는 작게~'],
+    ['구름 바닥 높이는 H = ⅛(T−Td). 2 km가 되려면?',
+     '<b>T−Td = 16</b> (예: 30 ℃/14 ℃)! 그리고 적운이 되려면 γ를 <b>9 이상</b>으로 크게!'],
+  ];
+  return {
+    build() {
+      $('scene').innerHTML = `
+      <svg class="full" id="s6svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s6sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#A2C4E8"/><stop offset=".55" stop-color="#DDEBF8"/><stop offset="1" stop-color="#FDEAD4"/>
+        </linearGradient></defs>
+        <rect width="1280" height="720" fill="url(#s6sky)"/>
+        ${rulerSVG(150, GY, PX, 3)}
+        <line id="s6Hline" x1="220" x2="1240" stroke="#8FB8DC" stroke-width="2.5" stroke-dasharray="8 7"/>
+        <text id="s6Hlab" x="1234" text-anchor="end" font-size="14" fill="#6E86B8" font-family="Jua"></text>
+        <path d="M0 ${GY} Q320 ${GY - 22} 640 ${GY + 2} Q960 ${GY + 24} 1280 ${GY - 4} L1280 720 L0 720 Z" fill="#C2E0BC"/>
+        <g transform="translate(1020,${GY - 130})">${[0, 1, 2, 3, 4].map(i =>
+          `<path d="M${i * 44 - 88} 0 L${i * 44 - 72} 0 L${i * 44 - 80} 14 Z" fill="${['#F8A8B8', '#F7C154', '#9FD6B4', '#A8C8F0', '#CBAEE8'][i]}"/>`).join('')}
+          <path d="M-90 0 H90" stroke="#C8B8A8" stroke-width="2.5"/></g>
+        <g transform="translate(1140,${GY})">
+          <rect x="-52" y="-30" width="104" height="30" rx="8" fill="#E8CBA8" stroke="#C8A478" stroke-width="3"/>
+          <rect x="-58" y="-36" width="116" height="10" rx="5" fill="#F5DEBE" stroke="#C8A478" stroke-width="2.5"/>
+          <text x="0" y="20" text-anchor="middle" font-size="14" fill="#8A6A52" font-family="Jua">잔치 준비 테이블</text></g>
+        <g id="s6deco"></g>
+        <g id="s6cloud" opacity="0"></g>
+        <g id="s6pcl" transform="translate(${X},${GY - 42})">${parcelSVG('s6pclInner')}</g>
+        <g id="s6mung" transform="translate(1010,${GY - 52})"></g>
+      </svg>
+      <div class="orderCard" style="left:14px;top:76px;max-width:400px">
+        <div class="oTag" id="s6Tag">잔치 주문서 1 / 3</div>
+        <div class="oTxt" id="s6Order"></div>
+      </div>
+      <div class="ctrl" style="left:14px;bottom:14px;width:min(420px,48vw)">
+        <div class="row"><label>기온 감률 γ</label>
+          <input type="range" id="s6g" class="gm" min="${C.g.min}" max="${C.g.max}" step="0.5" value="${st.g}">
+          <span class="sVal gCol" id="s6gv">${st.g.toFixed(1)} ℃/km</span></div>
+        <div class="row"><label>지표 기온</label>
+          <input type="range" id="s6T" min="${C.T.min}" max="${C.T.max}" step="1" value="${st.T}">
+          <span class="sVal tCol" id="s6Tv">${st.T} ℃</span></div>
+        <div class="row"><label>지표 이슬점</label>
+          <input type="range" id="s6Td" class="td" min="${C.Td.min}" max="${C.Td.max}" step="1" value="${st.Td}">
+          <span class="sVal tdCol" id="s6Tdv">${st.Td} ℃</span></div>
+        <div class="row" style="justify-content:center;margin-top:6px">
+          <button class="bigBtn" id="s6go">구름 만들기! (3 km까지 밀어올리기)</button></div>
+      </div>`;
+      this.svg = $('s6svg');
+      this.setMung('normal');
+      const upd = () => {
+        st.g = +$('s6g').value;
+        st.T = +$('s6T').value;
+        st.Td = Math.min(+$('s6Td').value, st.T);
+        if (+$('s6Td').value > st.T) $('s6Td').value = st.T;
+        $('s6gv').textContent = `${st.g.toFixed(1)} ℃/km`;
+        $('s6Tv').textContent = `${st.T} ℃`; $('s6Tdv').textContent = `${st.Td} ℃`;
+        const Hn = lclHeight(st.T, st.Td);
+        const hl = $('s6Hline'), hlab = $('s6Hlab');
+        if (Hn <= 3.3) {
+          const y = GY - Hn * PX;
+          hl.setAttribute('y1', y); hl.setAttribute('y2', y); hl.setAttribute('opacity', 1);
+          hlab.setAttribute('y', y - 7); hlab.setAttribute('opacity', 1);
+          hlab.textContent = `응결 고도 H = ${fmt2(Hn)} km`;
+        } else { hl.setAttribute('opacity', 0); hlab.setAttribute('opacity', 0); }
+        setMeters(0, st.T, st.Td);
+      };
+      ['s6g', 's6T', 's6Td'].forEach(id => $(id).addEventListener('input', upd));
+      $('s6go').addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        if (G.dialogActive || st.mode !== 'idle') return;
+        AudioSys.ensure(); AudioSys.sWhoosh();
+        st.mode = 'rise'; st.alt = 0; st.drift = -1;
+        $('s6go').disabled = true;
+        $('s6cloud').setAttribute('opacity', 0);
+      });
+      upd();
+      Dialog.run([
+        { who: 'mungmung', face: 'happy', text: '어서 와~! 드디어 <b>마을 대잔치</b> 날이야. 나는 잔치 준비 담당 뭉뭉이!' },
+        { who: 'mungmung', face: 'normal', text: '잔치에 쓸 <b>구름 장식</b> 주문이 밀려 있어. 너 구름 만들 줄 안다며? 부탁해도 될까?' },
+        { who: 'mungge', face: 'proud', text: '지금까지 배운 <span class="kw">γ · T · Td</span>를 몽땅 조합하는 마지막 의뢰야! 화이팅!' },
+      ], () => this.startOrder(0));
+    },
+    setMung(face) { $('s6mung').innerHTML = charNested('mungmung', face, -66, -72, 132, 140); },
+    startOrder(k) {
+      st.order = k;
+      setMission(k, HINTS[k]);
+      $('s6Tag').textContent = `잔치 주문서 ${k + 1} / 3`;
+      $('s6Order').innerHTML = ORDERS[k];
+      $('s6go').disabled = false;
+      st.mode = 'idle';
+    },
+    tick(dt) {
+      const Hn = lclHeight(st.T, st.Td);
+      if (st.mode === 'rise') {
+        st.alt += dt * 1.5;
+        const stopAt = Math.min(Math.max(Hn, 0.15), C.pushKm + 0.05);
+        const s = riseState(st.T, st.Td, Math.min(st.alt, C.pushKm));
+        setMeters(Math.min(st.alt, C.pushKm), s.T, s.Td);
+        if (st.alt >= (Hn > C.pushKm ? C.pushKm : stopAt)) { st.alt = Math.min(stopAt, C.pushKm); this.formCloud(Hn); }
+      } else if (st.mode === 'idle') {
+        st.alt = Math.max(0, st.alt - dt * 2.4);
+      }
+      const g = $('s6pcl'); if (!g) return;
+      g.setAttribute('transform', `translate(${X},${GY - 42 - st.alt * PX}) scale(${(1 + 0.13 * st.alt).toFixed(3)})`);
+      // 성공한 구름이 잔치 테이블로 스르륵
+      if (st.drift >= 0) {
+        st.drift = Math.min(1, st.drift + dt * 0.7);
+        const cx = lerp(X, 1010, st.drift), cy = lerp(0, 90, st.drift * st.drift);
+        $('s6cloud').setAttribute('transform', `translate(${(cx - X).toFixed(0)},${cy.toFixed(0)}) scale(${(1 - st.drift * 0.45).toFixed(2)})`);
+      }
+    },
+    formCloud(Hn) {
+      st.mode = 'judge';
+      const form = cloudForm(st.T, st.Td, st.g, C.pushKm);
+      const y = GY - Math.min(Hn, 3.1) * PX;
+      if (form === 'stratus') {
+        $('s6cloud').innerHTML = `<g transform="translate(${X},${y})">${cloudPuffsSVG(560, 26)}</g>`;
+        $('s6cloud').setAttribute('opacity', 1); AudioSys.sCondense();
+      } else if (form === 'cumulus') {
+        $('s6cloud').innerHTML = [0, 1, 2, 3].map(i =>
+          `<g transform="translate(${X + (i % 2 ? 24 : -18)},${y - i * 0.5 * PX})">${cloudPuffsSVG(140 + i * 24, 32 + i * 5)}</g>`).join('');
+        $('s6cloud').setAttribute('opacity', 1); AudioSys.sCondense();
+      }
+      $('s6cloud').setAttribute('transform', '');
+      setTimeout(() => this.judge(form, Hn), 750);
+    },
+    judge(form, Hn) {
+      const k = st.order;
+      let ok = false, failMsg = '';
+      if (form === 'none') failMsg = '3 km까지 밀었는데 구름이 안 생겼어! T−Td를 줄여서 H를 낮춰 보자.';
+      else if (k === 0) { ok = form === 'stratus'; failMsg = '위로 뭉게뭉게? 그건 적운이야! 카펫(층운)은 안정한 하늘(γ<5)에서~'; }
+      else if (k === 1) { ok = form === 'cumulus'; failMsg = '옆으로 얇게 퍼졌네. 풍선(적운)은 불안정! γ를 크게 키워 봐.'; }
+      else { ok = form === 'cumulus' && Math.abs(Hn - C.targetKm) <= C.tolKm;
+             failMsg = form !== 'cumulus' ? '모양은 적운이어야 해! γ를 더 크게~'
+                                          : `적운인데 구름 바닥이 ${fmt2(Hn)} km야. 딱 2.0 km가 되게 T−Td를 맞춰 봐!`; }
+      if (ok) {
+        st.drift = 0;
+        this.setMung('wow');
+        const p = svgToScreen(this.svg, 1010, GY - 140);
+        FX.burst(p.x, p.y, '#A8DEC8', 18);
+        // 잔치 장식이 쌓임
+        $('s6deco').innerHTML += `<g transform="translate(${960 + k * 70},${GY - 190 - k * 16})">${cloudPuffsSVG(90, 20)}</g>`;
+        celebrate(5, k, () => {
+          if (k < 2) {
+            Dialog.run([{ who: 'mungmung', face: 'happy',
+              text: k === 0 ? '와아, 폭신 카펫 완성! 발바닥이 간질간질~ 다음은 <b>적운 풍선</b>이야!'
+                            : '몽실몽실 풍선 최고! 마지막은 <b>특급 주문</b>… 실력을 보여 줘!' }],
+              () => this.startOrder(k + 1));
+          } else {
+            Dialog.run([
+              { who: 'mungmung', face: 'wow', text: '완벽해!! 장식 전부 완성!! 이제… <b>마을 대잔치</b>를 시작할 시간이야!!' },
+            ], () => stageComplete(5));
+          }
+        });
+      } else {
+        this.setMung('puzzled');
+        flub(5, failMsg);
+        setTimeout(() => {
+          $('s6cloud').setAttribute('opacity', 0);
+          st.mode = 'idle'; $('s6go').disabled = false;
+          this.setMung('normal');
+        }, 1000);
+      }
+    },
+  };
+};
+
+/* ============================================================
+   마을 대잔치 엔딩
+   ============================================================ */
+function showEnding() {
+  if (clearedCount() >= 6) grantTitle('마을의 영웅');
+  G.run = null; setStageHead(null); hideMeters();
+  AudioSys.startBgm('party');
+  AudioSys.sFanfare();
+  setScene({
+    build() {
+      const order = ['chorong', 'gasirong', 'mongsil', 'dotori', 'baksa', 'mungmung'];
+      $('scene').innerHTML = `
+      <svg class="full" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="eSky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#7FA2D8"/><stop offset=".5" stop-color="#C8A8D8"/><stop offset="1" stop-color="#F8C8A8"/>
+        </linearGradient></defs>
+        <rect width="1280" height="720" fill="url(#eSky)"/>
+        ${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<circle cx="${100 + i * 160}" cy="${70 + (i % 3) * 40}" r="2.5" fill="#FFF" opacity=".8"/>`).join('')}
+        <g transform="translate(640,60)">${[0, 1, 2, 3, 4, 5, 6].map(i =>
+          `<path d="M${i * 60 - 180} 0 L${i * 60 - 158} 0 L${i * 60 - 169} 18 Z" fill="${['#F8A8B8', '#F7C154', '#9FD6B4', '#A8C8F0', '#CBAEE8', '#F0A97E', '#F8A8B8'][i]}"/>`).join('')}
+          <path d="M-182 0 H182" stroke="#FFF" stroke-width="3"/></g>
+        <path d="M0 600 Q320 570 640 596 Q960 620 1280 590 L1280 720 L0 720 Z" fill="#B7E3C8"/>
+        ${order.map((id, i) => `<g transform="translate(${180 + i * 185},${560 - (i % 2) * 26})"><g class="${i % 2 ? 'bob2' : 'bob'}">
+          ${charSVG(id, 'happy', { attrs: `x="-62" y="-66" width="124" height="132"` })}</g></g>`).join('')}
+        <g transform="translate(640,300) scale(1.1)"><g class="bob">${charSVG('mungge', 'happy', { attrs: `x="-62" y="-66" width="124" height="132"` })}</g></g>
+      </svg>`;
+      this.fw = 0.3; this.panelT = 2.2; this.shown = false;
+    },
+    tick(dt) {
+      this.fw -= dt;
+      if (this.fw <= 0) {
+        this.fw = 0.9 + Math.random() * 0.8;
+        FX.firework(innerWidth * (0.15 + Math.random() * 0.7), innerHeight * (0.1 + Math.random() * 0.3));
+        FX.confetti(innerWidth * Math.random(), -10, 16);
+      }
+      this.panelT -= dt;
+      if (this.panelT <= 0 && !this.shown) {
+        this.shown = true;
+        const titles = G.titles.length
+          ? G.titles.map(t => `<span class="titleChip">🏅 ${t}</span>`).join('')
+          : '<span style="font-size:14px;color:#A98D77">획득한 칭호가 없어요</span>';
+        const heartsTotal = G.aff.reduce((a, b) => a + b, 0);
+        showOverlay(`<div class="panel gold" style="max-width:640px">
+          <h1 style="font-size:clamp(26px,5.6vh,40px)">🎊 마을 대잔치 🎊</h1>
+          <p>여섯 친구의 고민이 모두 해결됐어요!<br>
+          <b>공기를 다루는 기술</b>을 가진 당신은 이제 하늘마을의 자랑!</p>
+          <div style="margin:10px 0 4px;font-size:16px;color:#8A6A52">
+            ${pawIcon()} 스탬프 <b style="color:#D9784F">${stampCount()}/${TOTAL_STAMPS}</b> ·
+            💗 하트 <b style="color:#D96A6A">${fmt1(heartsTotal)}</b> ·
+            🔥 최고 콤보 <b style="color:#E8A24E">${G.bestCombo}</b></div>
+          <div style="margin:6px 0">${titles}</div>
+          <p style="font-size:13.5px;color:#A98D77;margin-top:6px">뭉게: "언제든 또 놀러 와~ 하늘은 매일 성격이 바뀌니까!"</p>
+          <button class="btn mint" id="endMap">마을 구경하기</button>
+          <button class="btn sub" id="endRetry">처음부터 다시</button>
+        </div>`);
+        $('endMap').addEventListener('pointerdown', e => { e.stopPropagation(); AudioSys.sPop(); hideOverlay(); showMap(); });
+        $('endRetry').addEventListener('pointerdown', e => { e.stopPropagation(); location.reload(); });
+      }
+    },
+  });
+  G.screen = 'ending';
+}
+
+/* ============================================================
+   부트스트랩
+   ============================================================ */
+window.addEventListener('resize', () => FX.resize());
+document.addEventListener('DOMContentLoaded', () => {
+  FX.init();
+  updateHud();
+  $('dialogWrap').addEventListener('pointerdown', e => { e.stopPropagation(); Dialog.tap(); });
+  $('stampBtn').addEventListener('pointerdown', e => { e.stopPropagation(); AudioSys.ensure(); openStampbook(); });
+  $('dexBtn').addEventListener('pointerdown', e => { e.stopPropagation(); AudioSys.ensure(); openDex(); });
+  $('hintBtn').addEventListener('pointerdown', e => { e.stopPropagation(); onHintTap(); });
+  $('muteBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    AudioSys.ensure();
+    AudioSys.setMuted(!AudioSys.muted);
+    $('muteBtn').textContent = AudioSys.muted ? '🔇' : '🔊';
+  });
+  // 오디오는 첫 터치에서 깨어남 (모바일 자동재생 정책)
+  document.body.addEventListener('pointerdown', () => AudioSys.ensure(), { once: true });
+  showTitle();
+  requestAnimationFrame(mainLoop);
+});
+</script>
+</body>
+</html>
