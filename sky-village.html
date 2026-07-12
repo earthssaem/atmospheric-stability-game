@@ -71,7 +71,7 @@
   /* 스테이지 헤더 (가운데): 동물 이름 + 호감도 + 미션 점 */
   #stageHead {
     position:absolute; top:10px; left:50%; transform:translateX(-50%);
-    padding:6px 18px; display:none; align-items:center; gap:12px; pointer-events:none;
+    padding:6px 18px; display:none; align-items:center; gap:12px; pointer-events:auto; cursor:pointer;
   }
   #stageHead.on { display:flex; }
   #shFace { width:46px; height:46px; }
@@ -316,6 +316,7 @@
     <div id="hudLeft">
       <button class="hudBtn" id="stampBtn" title="스탬프 수첩"></button>
       <button class="hudBtn" id="dexBtn" title="동물 도감"></button>
+      <button class="hudBtn" id="homeBtn" title="마을로 돌아가기" style="display:none"></button>
     </div>
     <div id="stageHead" class="hudCard">
       <div id="shFace"></div>
@@ -384,7 +385,7 @@ const TUNING = {
         Td: { min: 0,  max: 29, init: 14 },
         mtn: { min: 1, max: 3, step: 0.5, init: 2 },
         o1Target: 26, o1Tol: 0.5,     // 주문1: 도착 온도 26±0.5℃
-        o3Mtn: 3, o3Gap: 1 },         // 주문3: 산 3km + (T-Td) ≤ 1
+        o3Warm: 14 },                 // 주문3: 도착 온도가 출발보다 +14℃ 이상 (결과 기준)
   s5: { T0: 30, Td0: 22, topKm: 3.2,
         pokeKm: 0.5, pushKm: 2.0,     // 쿡 찔러보기 / 세게 밀어올리기 도달 고도
         buoyK: 0.4, damp: 0.988,      // 부력 가속 계수, 감쇠
@@ -840,6 +841,11 @@ function bookSVG() {
     <path d="M20 9 V32" stroke="#D8A468" stroke-width="2"/>
     <path d="M10 14 q5 -2 7 0 M10 19 q5 -2 7 0 M23 14 q5 -2 7 0 M23 19 q5 -2 7 0" stroke="#E0B888" stroke-width="1.8" fill="none"/></svg>`;
 }
+function houseIconSVG() {
+  return `<svg viewBox="0 0 40 40"><path d="M7 18 L20 6 L33 18 V31 Q33 34 30 34 H10 Q7 34 7 31 Z"
+    fill="#F5D9B8" stroke="#D8A468" stroke-width="2.6" stroke-linejoin="round"/>
+    <rect x="16" y="22" width="8" height="12" rx="3.5" fill="#FFFDF6" stroke="#D8A468" stroke-width="2"/></svg>`;
+}
 // 호감도 하트 (반 칸 지원)
 function heartSVG(fill) { // fill: 0 | 0.5 | 1
   const path = 'M12 20 C5 14 1.5 10.5 1.5 6.8 1.5 3.9 3.8 1.8 6.5 1.8 8.7 1.8 10.8 3.2 12 5.2 13.2 3.2 15.3 1.8 17.5 1.8 20.2 1.8 22.5 3.9 22.5 6.8 22.5 10.5 19 14 12 20Z';
@@ -1062,6 +1068,38 @@ const STAGES = [
 ];
 const WORLDS = ['월드1 · 오르내림의 기술', '월드2 · 구름과 산의 기술', '월드3 · 하늘 읽기의 기술'];
 const TOTAL_STAMPS = STAGES.reduce((s, st) => s + st.missions.length, 0);
+// 의뢰 다시 듣기 (상단 동물 이름표 탭)
+const STAGE_BRIEFS = [
+  [{ who: 'chorong', face: 'normal', text: '의뢰 다시 듣기 — 밭에 <b>주문 카드의 온도</b>인 공기를 배달해 줘!' },
+   { who: 'mungge', face: 'normal', text: '공기는 <b>1 km 오르면 −10 ℃, 내리면 +10 ℃</b>. 목표 온도에서 잠깐 유지하면 성공!' }],
+  [{ who: 'gasirong', face: 'puzzled', text: '의뢰 다시 듣기 — 구름 속에선 <b>왜 천천히 식는지</b> 알아내 줘!' },
+   { who: 'mungge', face: 'normal', text: '<b>숨은열 스위치</b>를 ON/OFF 바꿔 가며 공기를 <b>3 km 측정선</b>까지 올려 온도를 비교하자.' }],
+  [{ who: 'mongsil', face: 'normal', text: '의뢰 다시 듣기 — <b>침대 높이에 딱 맞는 구름</b>을 깔아 달라냥.' },
+   { who: 'mungge', face: 'normal', text: '구름은 <b>H = ⅛ × (T − Td)</b> 높이에서 생겨. 슬라이더로 맞추고 「공기 올리기」!' }],
+  [{ who: 'dotori', face: 'normal', text: '의뢰 다시 듣기 — 주문서 조건에 맞는 <b>바람을 산 너머로 배달</b>해 줘!' },
+   { who: 'mungge', face: 'normal', text: '오를 땐 응결되면 <b>−5 ℃/km</b>, 내려갈 땐 <b>+10 ℃/km</b>. 조건을 정하고 공기를 끌어 산을 넘자!' }],
+  [{ who: 'baksa', face: 'normal', text: '의뢰 다시 듣기 — <b>하늘 감정사 시험</b> 중이란다. 시험 카드의 과제를 보렴.' },
+   { who: 'mungge', face: 'normal', text: '덩어리가 <b>주위보다 따뜻하면 스스로 상승</b>! γ<5 안정 · 5~10 조건부 · γ>10 불안정.' }],
+  [{ who: 'mungmung', face: 'normal', text: '의뢰 다시 듣기 — 주문서에 맞는 <b>구름 장식</b>을 만들어 줘!' },
+   { who: 'mungge', face: 'normal', text: '<b>γ·T·Td</b>를 몽땅 조합! 층운은 안정+응결, 적운은 불안정, 구름 바닥 높이는 H=⅛(T−Td)!' }],
+];
+
+/* 화면 비율 대응 — 어떤 태블릿에서도 잘리지 않도록 viewBox를 화면 비율에 정확히 맞춘다.
+   기준(1280×720, 16:9)보다 화면이 좁으면(4:3 등) 위로 하늘을 넓히고, 넓으면 옆으로 넓힌다. */
+function sceneVB() {
+  const a = innerWidth / Math.max(1, innerHeight);
+  const BASE = 1280 / 720;
+  if (a >= BASE) { const w = Math.min(720 * a, 2400); return `${((1280 - w) / 2).toFixed(1)} 0 ${w.toFixed(1)} 720`; }
+  const h = Math.min(1280 / a, 1800);
+  return `0 ${(720 - h).toFixed(1)} 1280 ${h.toFixed(1)}`;
+}
+function applySceneVB() {
+  document.querySelectorAll('#scene svg.full').forEach(s => s.setAttribute('viewBox', sceneVB()));
+}
+// 기준 폭(0~1280) 밖 좌우를 채우는 땅 (와이드 화면 대비)
+function sideGround(y, color) {
+  return `<rect x="-800" y="${y}" width="800" height="1200" fill="${color}"/><rect x="1280" y="${y}" width="800" height="1200" fill="${color}"/>`;
+}
 
 /* ============================================================
    전역 상태 (메모리 전용 — 새로고침하면 초기화, 저장소 사용 안 함)
@@ -1076,12 +1114,13 @@ const G = {
   secretShown: STAGES.map(() => false),
   combo: 0, bestCombo: 0,
   titles: [],
+  startUnlock: 1,   // 교사용 ?start=N — 시작 시 N번째 집까지 열림 (차시 분할용, 저장소 미사용)
   run: null,   // 진행 중 스테이지 런타임 { idx, mIdx, failStreak, failCount, hintUsed, hintLevel, hints }
   time: 0,
 };
 const stampCount = () => G.stamps.flat().filter(Boolean).length;
 const clearedCount = () => G.cleared.filter(Boolean).length;
-const unlockedCount = () => Math.min(STAGES.length, clearedCount() + 1); // 순차 잠금
+const unlockedCount = () => Math.min(STAGES.length, Math.max(G.startUnlock, clearedCount() + 1)); // 순차 잠금 (+교사용 ?start=N)
 
 /* ============================================================
    HUD
@@ -1090,6 +1129,7 @@ function updateHud() {
   $('stampBtn').innerHTML = `${pawSVG()}<span class="cnt">${stampCount()}/${TOTAL_STAMPS}</span>`;
   $('dexBtn').innerHTML = `${bookSVG()}<span class="cnt">${clearedCount()}/6</span>`;
   $('hintBtn').innerHTML = charSVG('mungge', 'normal');
+  $('homeBtn').innerHTML = houseIconSVG();
 }
 function setStageHead(idx) {
   const head = $('stageHead');
@@ -1132,7 +1172,7 @@ function celebrate(stageIdx, mIdx, next, { big = false } = {}) {
   const st = STAGES[stageIdx], a = animalById(st.animal);
   const first = !G.stamps[stageIdx][mIdx];
   G.stamps[stageIdx][mIdx] = true;
-  addAff(stageIdx, TUNING.aff.win);
+  addAff(stageIdx, first ? TUNING.aff.win : TUNING.aff.win / 2);   // 재도전은 절반 (호감도 파밍 완화)
   G.combo++;
   G.bestCombo = Math.max(G.bestCombo, G.combo);
   if (G.run) { G.run.failStreak = 0; G.run.hintLevel = 0; }
@@ -1287,16 +1327,18 @@ function mainLoop(now) {
    ============================================================ */
 function showTitle() {
   G.run = null; setStageHead(null); hideMeters();
+  $('homeBtn').style.display = 'none';
   setScene({
     build() {
       $('scene').innerHTML = `
-      <svg class="full" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+      <svg class="full" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
         <defs>
-          <linearGradient id="tSky" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="tSky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
             <stop offset="0" stop-color="#BFE3F7"/><stop offset=".55" stop-color="#DFF0FB"/><stop offset="1" stop-color="#FFF3E2"/>
           </linearGradient>
         </defs>
-        <rect width="1280" height="720" fill="url(#tSky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#tSky)"/>
+        ${sideGround(630, '#CDEBD2')}
         <circle cx="150" cy="120" r="58" fill="#FFE9A8" opacity=".9"/>
         <circle cx="150" cy="120" r="76" fill="#FFE9A8" opacity=".28"/>
         <g class="drift" opacity=".85">${cloudPuffsSVG(220, 46).replace('<g ', '<g transform="translate(300,150)" ')}</g>
@@ -1385,6 +1427,7 @@ function houseSVG(i, cleared, locked) {
 }
 function showMap(opts = {}) {
   G.run = null; setStageHead(null); hideMeters();
+  $('homeBtn').style.display = 'none';
   $('hintBtn').classList.remove('pulse');
   updateHud();
   AudioSys.startBgm('village');
@@ -1405,16 +1448,17 @@ function showMap(opts = {}) {
         <rect x="-108" y="-16" width="216" height="32" rx="16" fill="rgba(255,251,243,.85)" stroke="#E9CDB4" stroke-width="2.5"/>
         <text x="0" y="6" text-anchor="middle" font-size="16" fill="#B0703F" font-family="Jua">${WORLDS[i]}</text></g>`).join('');
       $('scene').innerHTML = `
-      <svg class="full" id="mapSvg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+      <svg class="full" id="mapSvg" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
         <defs>
-          <linearGradient id="mSky" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="mSky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
             <stop offset="0" stop-color="#B5DFF6"/><stop offset=".5" stop-color="#DCEEFA"/><stop offset="1" stop-color="#FFF0DC"/>
           </linearGradient>
           <linearGradient id="mMtn" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="#D9E6F4"/><stop offset="1" stop-color="#C2D6EC"/>
           </linearGradient>
         </defs>
-        <rect width="1280" height="720" fill="url(#mSky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#mSky)"/>
+        ${sideGround(656, '#B7E3C8')}
         <circle cx="118" cy="104" r="46" fill="#FFE9A8"/>
         <circle cx="118" cy="104" r="62" fill="#FFE9A8" opacity=".3"/>
         <g class="drift" opacity=".8"><g transform="translate(430,90)">${cloudPuffsSVG(180, 36)}</g></g>
@@ -1477,6 +1521,7 @@ let STAGE_BUILDERS = []; // 각 스테이지 씬 팩토리 (아래에서 채움)
 function startStage(i) {
   G.run = { idx: i, mIdx: 0, failStreak: 0, failCount: 0, hintUsed: false, hintLevel: 0, hints: [] };
   setStageHead(i);
+  $('homeBtn').style.display = 'flex';
   $('hintBtn').classList.remove('pulse');
   AudioSys.startBgm(STAGE_BGM[i]);
   G.screen = 'stage';
@@ -1490,11 +1535,12 @@ function setMission(m, hints) {
 }
 // 스테이지 클리어: 노미스/노힌트 정산 → 칭호 → 결과 패널
 function stageComplete(idx) {
+  const firstClear = !G.cleared[idx];
   const noMiss = G.run && G.run.failCount === 0;
   const noHint = G.run && !G.run.hintUsed;
   if (noMiss) {
-    if (!G.noMiss[idx]) G.noMiss[idx] = true;
-    addAff(idx, TUNING.aff.perfect);
+    G.noMiss[idx] = true;
+    if (firstClear) addAff(idx, TUNING.aff.perfect);   // 노미스 보너스는 첫 클리어에만
   }
   if (noHint) G.noHint[idx] = true;
   G.cleared[idx] = true;
@@ -1590,11 +1636,12 @@ STAGE_BUILDERS[0] = function () {
   return {
     build() {
       $('scene').innerHTML = `
-      <svg class="full" id="s1svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
-        <defs><linearGradient id="s1sky" x1="0" y1="0" x2="0" y2="1">
+      <svg class="full" id="s1svg" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s1sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
           <stop offset="0" stop-color="#9CCBEE"/><stop offset=".6" stop-color="#D8ECFA"/><stop offset="1" stop-color="#FFEEDC"/>
         </linearGradient></defs>
-        <rect width="1280" height="720" fill="url(#s1sky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#s1sky)"/>
+        ${sideGround(594, '#E8C89A')}
         <circle cx="850" cy="118" r="50" fill="#FFDF8E"/><circle cx="850" cy="118" r="68" fill="#FFDF8E" opacity=".3"/>
         <g class="drift" opacity=".7"><g transform="translate(300,140)">${cloudPuffsSVG(150, 32)}</g></g>
         ${rulerSVG(150, GY, PX, C.maxKm)}
@@ -1637,6 +1684,7 @@ STAGE_BUILDERS[0] = function () {
     },
     setChorong(face) { $('s1chorong').innerHTML = charNested('chorong', face, -70, -76, 140, 148); },
     startRound(r) {
+      if (!G.run) return;
       st.round = r; st.hold = 0; st.locked = false; st.done = false;
       const R = C.rounds[r];
       setMission(r, HINTS[r]);
@@ -1689,6 +1737,7 @@ STAGE_BUILDERS[0] = function () {
       FX.burst(p.x, p.y, '#9FD6B4', 16);
       const r = st.round;
       celebrate(0, r, () => {
+        if (!G.run) return;
         if (r < 2) {
           Dialog.run([{ who: 'chorong', face: r === 0 ? 'happy' : 'wow',
             text: r === 0 ? '와아, 시원해! 당근 잎이 살아났어! <b>더 시원한 것</b>도 될까?'
@@ -1728,11 +1777,12 @@ STAGE_BUILDERS[1] = function () {
       const r1 = riseState(C.T0, C.Td0, H), rTop = riseState(C.T0, C.Td0, C.maxKm);
       const onPath = `M${gx(C.T0)} ${gy(0)} L${gx(r1.T)} ${gy(H)} L${gx(rTop.T)} ${gy(C.maxKm)}`;
       $('scene').innerHTML = `
-      <svg class="full" id="s2svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
-        <defs><linearGradient id="s2sky" x1="0" y1="0" x2="0" y2="1">
+      <svg class="full" id="s2svg" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s2sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
           <stop offset="0" stop-color="#A8C8E8"/><stop offset=".65" stop-color="#DCE9F6"/><stop offset="1" stop-color="#F5E8D2"/>
         </linearGradient></defs>
-        <rect width="1280" height="720" fill="url(#s2sky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#s2sky)"/>
+        ${sideGround(636, '#CDE4C2')}
         <path d="M900 720 L900 ${GY} Q1090 ${GY - 24} 1280 ${GY} L1280 720 Z" fill="#C8B490" opacity="0"/>
         ${rulerSVG(940, GY, PX, C.maxKm)}
         <line x1="940" y1="${GY - PX * H}" x2="1230" y2="${GY - PX * H}" stroke="#8FB8DC" stroke-width="2.5" stroke-dasharray="8 7"/>
@@ -1872,6 +1922,7 @@ STAGE_BUILDERS[1] = function () {
       }
     },
     startQuiz() {
+      if (!G.run) return;
       setMission(1, HINTS_QUIZ);
       $('s2gasirong').innerHTML = charNested('gasirong', 'puzzled', -66, -72, 132, 140);
       Dialog.run([
@@ -1901,13 +1952,14 @@ STAGE_BUILDERS[1] = function () {
             $('s2q' + i).classList.add('wrong');
             shake();
             flub(1, '갸우뚱… 돋보기에서 본 반짝임을 떠올려 봐!');
-            setTimeout(() => $('s2q' + i).classList.remove('wrong'), 900);
+            setTimeout(() => { if (G.run) this.showQuiz(); }, 950);   // 보기 재셔플 (소거법 방지)
           }
         });
       });
     },
     finish() {
       celebrate(1, 1, () => {
+        if (!G.run) return;
         // 가시롱이 동그랗게 말리는 리액션: 몸을 공처럼
         $('s2gasirong').innerHTML = `<g class="bob">${charNested('gasirong', 'sleep', -66, -72, 132, 140, { prop: true })}</g>`;
         Dialog.run([
@@ -1940,11 +1992,12 @@ STAGE_BUILDERS[2] = function () {
   return {
     build() {
       $('scene').innerHTML = `
-      <svg class="full" id="s3svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
-        <defs><linearGradient id="s3sky" x1="0" y1="0" x2="0" y2="1">
+      <svg class="full" id="s3svg" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s3sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
           <stop offset="0" stop-color="#A4CDEE"/><stop offset=".6" stop-color="#DCEDF9"/><stop offset="1" stop-color="#F2E6F4"/>
         </linearGradient></defs>
-        <rect width="1280" height="720" fill="url(#s3sky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#s3sky)"/>
+        ${sideGround(608, '#CDE0F2')}
         <g class="drift" opacity=".6"><g transform="translate(180,120)">${cloudPuffsSVG(140, 30)}</g></g>
         ${rulerSVG(150, GY, PX, 3)}
         <path d="M0 ${GY + 4} Q320 ${GY - 20} 640 ${GY + 4} Q960 ${GY + 26} 1280 ${GY} L1280 720 L0 720 Z" fill="#CDE0F2"/>
@@ -1958,10 +2011,10 @@ STAGE_BUILDERS[2] = function () {
       </svg>
       <div class="ctrl" style="left:14px;bottom:14px;width:min(390px,46vw)">
         <div class="row"><label>기온 T</label>
-          <input type="range" id="s3T" min="${C.T.min}" max="${C.T.max}" step="1" value="${st.T}">
+          <input type="range" id="s3T" min="${C.T.min}" max="${C.T.max}" step="0.5" value="${st.T}">
           <span class="sVal tCol" id="s3Tv">${st.T} ℃</span></div>
         <div class="row"><label>이슬점 Td</label>
-          <input type="range" id="s3Td" class="td" min="${C.Td.min}" max="${C.Td.max}" step="1" value="${st.Td}">
+          <input type="range" id="s3Td" class="td" min="${C.Td.min}" max="${C.Td.max}" step="0.5" value="${st.Td}">
           <span class="sVal tdCol" id="s3Tdv">${st.Td} ℃</span></div>
         <div class="row" style="justify-content:center;margin-top:8px">
           <button class="bigBtn" id="s3go">공기 올리기!</button></div>
@@ -1981,7 +2034,7 @@ STAGE_BUILDERS[2] = function () {
         st.T = +$('s3T').value;
         st.Td = Math.min(+$('s3Td').value, st.T);
         if (+$('s3Td').value > st.T) $('s3Td').value = st.T;
-        $('s3Tv').textContent = `${st.T} ℃`; $('s3Tdv').textContent = `${st.Td} ℃`;
+        $('s3Tv').textContent = `${fmt1(st.T)} ℃`; $('s3Tdv').textContent = `${fmt1(st.Td)} ℃`;
         setMeters(0, st.T, st.Td);
       };
       $('s3T').addEventListener('input', upd);
@@ -2005,6 +2058,7 @@ STAGE_BUILDERS[2] = function () {
     setMongsil(face) { $('s3mongsil').innerHTML = charNested('mongsil', face, -60, -66, 120, 128); },
     bedY() { return GY - C.targets[st.round] * PX; },
     startRound(r) {
+      if (!G.run) return;
       st.round = r; st.mode = 'idle'; st.jump = -1;
       setMission(r, HINTS[r]);
       const km = C.targets[r];
@@ -2070,12 +2124,14 @@ STAGE_BUILDERS[2] = function () {
         AudioSys.sCondense();
       }
       setTimeout(() => {
+        if (!G.run) return;
         if (okHeight) this.success();
         else {
           if (H > C.maxKm) flub(2, '공기가 너무 건조해서 하늘 끝까지 구름이 안 생겼어!');
           else flub(2, `구름이 ${fmt2(H)} km에 생겼네. 주문은 ${target.toFixed(1)} km! ${H > target ? '조금 낮게' : '조금 높게'} 만들어 보자.`);
           this.setMongsil('puzzled');
           setTimeout(() => {
+            if (!G.run) return;
             $('s3cloud').setAttribute('opacity', 0);
             $('s3cloudLab').setAttribute('opacity', 0);
             $('s3pcl').setAttribute('opacity', 1);
@@ -2093,6 +2149,7 @@ STAGE_BUILDERS[2] = function () {
       const p = svgToScreen(this.svg, BX, this.bedY());
       FX.burst(p.x, p.y, '#CBAEE8', 18);
       celebrate(2, r, () => {
+        if (!G.run) return;
         if (r < 2) {
           Dialog.run([{ who: 'mongsil', face: 'happy',
             text: r === 0 ? '냐아~ 폭신폭신 완벽해! …그런데 <b>더 높은 곳</b> 침대도 부탁할게. 경치가 좋거든!'
@@ -2131,7 +2188,7 @@ STAGE_BUILDERS[3] = function () {
   const ORDERS = [
     `친척집에 딱 <b>26 ℃</b> 바람 배달! (±0.5 ℃)`,
     `이번엔 <b>비를 한 방울도 안 뿌리고</b> 넘어와 줘!`,
-    `<b>가장 뜨겁고 건조한</b> 바람으로 부탁해! (산 최대 + Td = T−1)`,
+    `<b>가장 뜨겁고 건조한</b> 바람으로 부탁해! (도착 온도가 출발보다 <b>+14 ℃</b> 이상!)`,
   ];
   const terrainAlt = x => {
     if (x <= XL || x >= XR) return 0;
@@ -2140,14 +2197,15 @@ STAGE_BUILDERS[3] = function () {
   return {
     build() {
       $('scene').innerHTML = `
-      <svg class="full" id="s4svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
-        <defs><linearGradient id="s4sky" x1="0" y1="0" x2="0" y2="1">
+      <svg class="full" id="s4svg" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s4sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
           <stop offset="0" stop-color="#9CC8EC"/><stop offset=".6" stop-color="#D8EAF8"/><stop offset="1" stop-color="#FBEBD8"/>
         </linearGradient></defs>
-        <rect width="1280" height="720" fill="url(#s4sky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#s4sky)"/>
+        ${sideGround(600, '#C2E0BC')}
         <path d="M0 ${GY} H1280 V720 H0 Z" fill="#C2E0BC"/>
         <line id="s4Hline" x1="60" x2="1220" stroke="#8FB8DC" stroke-width="2.5" stroke-dasharray="8 7"/>
-        <text id="s4Hlab" x="66" font-size="14" fill="#6E86B8" font-family="Jua"></text>
+        <text id="s4Hlab" x="1216" text-anchor="end" font-size="14" fill="#6E86B8" font-family="Jua"></text>
         <g id="s4mtn"></g>
         <g transform="translate(120,${GY})">
           <rect x="-34" y="-52" width="68" height="52" rx="10" fill="#FBDBB4" stroke="#E8B478" stroke-width="3"/>
@@ -2242,6 +2300,7 @@ STAGE_BUILDERS[3] = function () {
       st.top = null; st.delivered = false; st.held = false;
     },
     startOrder(k) {
+      if (!G.run) return;
       st.order = k;
       setMission(k, HINTS[k]);
       $('s4OrderTag').textContent = `주문서 ${k + 1} / 3`;
@@ -2296,8 +2355,9 @@ STAGE_BUILDERS[3] = function () {
         failMsg = st.condensed ? '앗, 산을 오르다 비가 주룩주룩 왔어! 응결 고도를 산보다 높게 만들어 봐.'
                                : '';
       } else {
-        ok = st.mtn >= C.o3Mtn - 0.01 && (st.T - st.Td) <= C.o3Gap + 0.01 && st.condensed;
-        failMsg = `더 뜨겁고 건조하게! 도착 ${fmt1(s.T)} ℃로는 부족해~ 산을 더 높이, 이슬점은 기온 바로 아래로!`;
+        const warm = s.T - st.T;
+        ok = st.condensed && warm >= C.o3Warm - 0.001;
+        failMsg = `이번엔 출발보다 <b>+${fmt1(warm)} ℃</b> 데워졌어. +14 ℃ 이상 필요해! 산은 최대로, 이슬점은 기온 바로 아래로~`;
       }
       if (ok) {
         this.setDotori('wow');
@@ -2305,6 +2365,7 @@ STAGE_BUILDERS[3] = function () {
         FX.burst(p.x, p.y, '#F7C154', 18);
         AudioSys.sStamp();
         celebrate(3, k, () => {
+          if (!G.run) return;
           if (k < 2) {
             Dialog.run([{ who: 'dotori', face: 'happy',
               text: k === 0 ? '도장 쾅! 소포를 열어 보니… 딱 좋은 <b>따끈한 바람</b>! 친척이 기뻐하겠다~ 다음 주문!'
@@ -2320,7 +2381,7 @@ STAGE_BUILDERS[3] = function () {
       } else {
         this.setDotori('puzzled');
         flub(3, failMsg);
-        setTimeout(() => { this.resetParcel(); st.locked = false; this.setDotori('normal'); }, 1100);
+        setTimeout(() => { if (!G.run) return; this.resetParcel(); st.locked = false; this.setDotori('normal'); }, 1100);
       }
     },
   };
@@ -2336,7 +2397,8 @@ STAGE_BUILDERS[4] = function () {
   const GY = 600, TOPY = 96, PX = (GY - TOPY) / C.topKm, X = 560;
   const H = lclHeight(C.T0, C.Td0);  // 1.0 km
   const st = { gamma: 8, mode: 'idle', alt: 0, v: 0, target: 0, freeT: 0,
-               condensed: false, lastPush: 0, exam: 0, streak: 0, skyPlan: [], busy: false, lockG: true };
+               condensed: false, lastPush: 0, exam: 0, streak: 0, skyPlan: [], busy: false, lockG: true,
+               observed: false };   // 감정 시험: 하늘마다 최소 1회 찔러본 뒤 판정 가능
   const HINTS = [
     ['공기를 살짝 찔러 보고 <b>되돌아오는지, 계속 오르는지</b> 관찰해 봐!',
      '숫자만 봐도 알 수 있어~ <b>γ<5 절대 안정 · γ>10 절대 불안정 · 그 사이 조건부</b>!'],
@@ -2348,11 +2410,12 @@ STAGE_BUILDERS[4] = function () {
   return {
     build() {
       $('scene').innerHTML = `
-      <svg class="full" id="s5svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
-        <defs><linearGradient id="s5sky" x1="0" y1="0" x2="0" y2="1">
+      <svg class="full" id="s5svg" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s5sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
           <stop offset="0" stop-color="#8FB4E0"/><stop offset=".55" stop-color="#CFE2F4"/><stop offset="1" stop-color="#F2E9DC"/>
         </linearGradient></defs>
-        <rect width="1280" height="720" fill="url(#s5sky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#s5sky)"/>
+        ${sideGround(600, '#C8D8E8')}
         ${rulerSVG(150, GY, PX, 3)}
         ${[0, 1, 2, 3].map(k => `<g transform="translate(238,${GY - k * PX})">
           <rect x="-46" y="-15" width="92" height="30" rx="14" fill="rgba(255,251,243,.85)" stroke="#E9CDB4" stroke-width="2"/>
@@ -2420,6 +2483,7 @@ STAGE_BUILDERS[4] = function () {
     setBaksa(face) { $('s5baksa').innerHTML = charNested('baksa', face, -66, -72, 132, 140); },
     envLabels() { [0, 1, 2, 3].forEach(k => { const el = $('s5e' + k); if (el) el.textContent = `${fmt1(envTemp(C.T0, st.gamma, k))} ℃`; }); },
     startExam(n) {
+      if (!G.run) return;
       st.exam = n;
       setMission(n, HINTS[n]);
       this.clearClouds();
@@ -2443,6 +2507,8 @@ STAGE_BUILDERS[4] = function () {
       const cat = st.skyPlan[st.streak % 3];
       this.setG(pick(C.pools[cat]));
       $('s5Order').innerHTML = `오늘의 하늘 <b>#${st.streak + 1}</b> — γ = <b>${st.gamma.toFixed(1)} ℃/km</b>. 찔러 보고 판정패를 골라라! (연속 ${st.streak}/3)`;
+      st.observed = false;
+      $('s5cards').style.opacity = .55;
       this.clearClouds();
     },
     launch(h) {
@@ -2450,6 +2516,7 @@ STAGE_BUILDERS[4] = function () {
       AudioSys.ensure(); AudioSys.sWhoosh();
       st.busy = true; st.mode = 'forced'; st.target = h; st.lastPush = h;
       st.condensed = false; st.freeT = 0;
+      if (st.exam === 0 && !st.observed) { st.observed = true; $('s5cards').style.opacity = 1; }
       this.clearClouds();
     },
     clearClouds() {
@@ -2458,6 +2525,11 @@ STAGE_BUILDERS[4] = function () {
     },
     verdict(v) {
       if (G.dialogActive || st.exam !== 0) return;
+      if (!st.observed) {
+        AudioSys.sPop();
+        toast('먼저 공기를 <b>쿡 찔러 보고</b>(관찰 1회) 판정하자!', false, 1700);
+        return;
+      }
       AudioSys.sPop();
       if (v === stability(st.gamma)) {
         st.streak++;
@@ -2582,11 +2654,12 @@ STAGE_BUILDERS[5] = function () {
   return {
     build() {
       $('scene').innerHTML = `
-      <svg class="full" id="s6svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
-        <defs><linearGradient id="s6sky" x1="0" y1="0" x2="0" y2="1">
+      <svg class="full" id="s6svg" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="s6sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
           <stop offset="0" stop-color="#A2C4E8"/><stop offset=".55" stop-color="#DDEBF8"/><stop offset="1" stop-color="#FDEAD4"/>
         </linearGradient></defs>
-        <rect width="1280" height="720" fill="url(#s6sky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#s6sky)"/>
+        ${sideGround(592, '#C2E0BC')}
         ${rulerSVG(150, GY, PX, 3)}
         <line id="s6Hline" x1="220" x2="1240" stroke="#8FB8DC" stroke-width="2.5" stroke-dasharray="8 7"/>
         <text id="s6Hlab" x="1234" text-anchor="end" font-size="14" fill="#6E86B8" font-family="Jua"></text>
@@ -2657,6 +2730,7 @@ STAGE_BUILDERS[5] = function () {
     },
     setMung(face) { $('s6mung').innerHTML = charNested('mungmung', face, -66, -72, 132, 140); },
     startOrder(k) {
+      if (!G.run) return;
       st.order = k;
       setMission(k, HINTS[k]);
       $('s6Tag').textContent = `잔치 주문서 ${k + 1} / 3`;
@@ -2716,6 +2790,7 @@ STAGE_BUILDERS[5] = function () {
         // 잔치 장식이 쌓임
         $('s6deco').innerHTML += `<g transform="translate(${960 + k * 70},${GY - 190 - k * 16})">${cloudPuffsSVG(90, 20)}</g>`;
         celebrate(5, k, () => {
+          if (!G.run) return;
           if (k < 2) {
             Dialog.run([{ who: 'mungmung', face: 'happy',
               text: k === 0 ? '와아, 폭신 카펫 완성! 발바닥이 간질간질~ 다음은 <b>적운 풍선</b>이야!'
@@ -2731,6 +2806,7 @@ STAGE_BUILDERS[5] = function () {
         this.setMung('puzzled');
         flub(5, failMsg);
         setTimeout(() => {
+          if (!G.run) return;
           $('s6cloud').setAttribute('opacity', 0);
           st.mode = 'idle'; $('s6go').disabled = false;
           this.setMung('normal');
@@ -2746,17 +2822,19 @@ STAGE_BUILDERS[5] = function () {
 function showEnding() {
   if (clearedCount() >= 6) grantTitle('마을의 영웅');
   G.run = null; setStageHead(null); hideMeters();
+  $('homeBtn').style.display = 'none';
   AudioSys.startBgm('party');
   AudioSys.sFanfare();
   setScene({
     build() {
       const order = ['chorong', 'gasirong', 'mongsil', 'dotori', 'baksa', 'mungmung'];
       $('scene').innerHTML = `
-      <svg class="full" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
-        <defs><linearGradient id="eSky" x1="0" y1="0" x2="0" y2="1">
+      <svg class="full" viewBox="${sceneVB()}" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="eSky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="720">
           <stop offset="0" stop-color="#7FA2D8"/><stop offset=".5" stop-color="#C8A8D8"/><stop offset="1" stop-color="#F8C8A8"/>
         </linearGradient></defs>
-        <rect width="1280" height="720" fill="url(#eSky)"/>
+        <rect x="-800" y="-900" width="2880" height="2340" fill="url(#eSky)"/>
+        ${sideGround(592, '#B7E3C8')}
         ${[0, 1, 2, 3, 4, 5, 6, 7].map(i => `<circle cx="${100 + i * 160}" cy="${70 + (i % 3) * 40}" r="2.5" fill="#FFF" opacity=".8"/>`).join('')}
         <g transform="translate(640,60)">${[0, 1, 2, 3, 4, 5, 6].map(i =>
           `<path d="M${i * 60 - 180} 0 L${i * 60 - 158} 0 L${i * 60 - 169} 18 Z" fill="${['#F8A8B8', '#F7C154', '#9FD6B4', '#A8C8F0', '#CBAEE8', '#F0A97E', '#F8A8B8'][i]}"/>`).join('')}
@@ -2806,7 +2884,7 @@ function showEnding() {
 /* ============================================================
    부트스트랩
    ============================================================ */
-window.addEventListener('resize', () => FX.resize());
+window.addEventListener('resize', () => { FX.resize(); applySceneVB(); });
 document.addEventListener('DOMContentLoaded', () => {
   FX.init();
   updateHud();
@@ -2820,6 +2898,36 @@ document.addEventListener('DOMContentLoaded', () => {
     AudioSys.setMuted(!AudioSys.muted);
     $('muteBtn').textContent = AudioSys.muted ? '🔇' : '🔊';
   });
+  // 마을로 돌아가기 (스테이지 중에만 표시)
+  $('homeBtn').addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    if (!G.run) return;
+    AudioSys.ensure(); AudioSys.sPop();
+    showOverlay(`<div class="panel">
+      <h3 style="margin-bottom:4px">마을로 돌아갈까?</h3>
+      <p>지금까지 받은 스탬프·하트는 그대로예요.<br>진행 중이던 미션만 다음에 다시 도전!</p>
+      <button class="btn" id="homeGo">마을로 돌아가기</button>
+      <button class="btn sub" id="homeStay">계속하기</button></div>`);
+    $('homeGo').addEventListener('pointerdown', ev => { ev.stopPropagation(); AudioSys.sPop(); hideOverlay(); Dialog.abort(); showMap(); });
+    $('homeStay').addEventListener('pointerdown', ev => { ev.stopPropagation(); AudioSys.sPop(); hideOverlay(); });
+  });
+  // 의뢰 다시 듣기: 상단 동물 이름표 탭
+  $('stageHead').addEventListener('pointerdown', e => {
+    e.stopPropagation();
+    if (!G.run || G.dialogActive) return;
+    AudioSys.ensure(); AudioSys.sPop();
+    Dialog.run(STAGE_BRIEFS[G.run.idx]);
+  });
+  // 교사용 차시 분할: ?start=N (1~6) — N번째 집까지 열린 채 시작
+  const sp = parseInt(new URLSearchParams(location.search).get('start'), 10);
+  if (!isNaN(sp)) G.startUnlock = clamp(sp, 1, STAGES.length);
+  // 세로 화면(회전 안내) 동안 BGM 일시 정지
+  const por = matchMedia('(orientation: portrait)');
+  const onRot = () => {
+    if (por.matches) { if (AudioSys.bgmName) { G._bgmSaved = AudioSys.bgmName; AudioSys.stopBgm(); } }
+    else if (G._bgmSaved) { AudioSys.startBgm(G._bgmSaved); G._bgmSaved = null; }
+  };
+  if (por.addEventListener) por.addEventListener('change', onRot);
   // 오디오는 첫 터치에서 깨어남 (모바일 자동재생 정책)
   document.body.addEventListener('pointerdown', () => AudioSys.ensure(), { once: true });
   showTitle();
