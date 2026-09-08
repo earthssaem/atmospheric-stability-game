@@ -1,0 +1,14 @@
+{
+  "name": "mungge-sky-journey",
+  "version": "1.2.0",
+  "description": "뭉게의 하늘 여행 — 대기 안정도와 강수 스토리 어드벤처 교육 게임 (단일 HTML)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/physics.test.mjs",
+    "test:e2e": "node tests/e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}
