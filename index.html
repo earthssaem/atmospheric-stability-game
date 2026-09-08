@@ -28,7 +28,7 @@
   }
   /* 은은한 종이 질감 (feTurbulence 노이즈 타일) */
   #grain {
-    position:absolute; inset:0; pointer-events:none; z-index:40; opacity:.05; mix-blend-mode:multiply;
+    position:absolute; inset:0; pointer-events:none; z-index:40; opacity:.07;
     background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
@@ -635,8 +635,9 @@ function shake() {
    하트 감소 / 챕터 재시작
    ============================================================ */
 let heartLossGuard = 0; // 연속 감점 방지 타임스탬프
-function loseHeart(reason) {
-  if (S.time - heartLossGuard < 0.9) return;
+function loseHeart(reason, force = false) {
+  // 같은 실수가 한 프레임 안에 겹쳐 두 번 깎이는 것을 막는 가드 (리듬 miss 처럼 개수 기반 감점은 force 로 통과)
+  if (!force && S.time - heartLossGuard < 0.9) return;
   heartLossGuard = S.time;
   S.hearts = Math.max(0, S.hearts - 1);
   renderHearts(); shake(); AudioSys.sHeart();
@@ -1114,6 +1115,8 @@ function setScene(s) {
   scene = s;
   if (s.resize) s.resize();
   if (s.enter) s.enter();
+  // 인트로 대사 동안 update 가 멈추므로, 계기판·미니 그래프가 이전 챕터 값으로 남지 않게 한 번 갱신
+  if (s.update) s.update(0);
 }
 
 function startChapter(i, skipIntro = false) {
@@ -1838,7 +1841,7 @@ const Ch4Scene = {
       if (!n.hit && !n.miss && now > n.t + win) {
         n.miss = true; this.misses++;
         AudioSys.sMiss(); M.setFace('hurt', 0.5);
-        if (this.misses % TUNING.ch4.missesPerHeart === 0) loseHeart('빗방울을 놓쳤어…');
+        if (this.misses % TUNING.ch4.missesPerHeart === 0) loseHeart('빗방울을 놓쳤어…', true);
       }
     });
     const allDone = this.notes.every(n => n.hit || n.miss);
@@ -1965,7 +1968,7 @@ const ch4 = {
    ============================================================ */
 const Ch5Scene = {
   playing: false, camX: 0, camY: 0, pxX: 0, pxY: 0, worldTopKm: 2.6, worldWKm: 4.4,
-  landed: false, poofed: false,
+  landed: false,
   terrain(x) { return 2.0 * (1 - smooth(clamp((x - 0.15) / 2.9, 0, 1))); },
   zone() { return { a: 3.25, b: 3.95 }; },
   enter() {
@@ -1974,7 +1977,7 @@ const Ch5Scene = {
     this.camX = 0; this.camY = 0; this.clampCam();
     const sp = this.w2s(0.3, 2.25);
     M.place(sp.x, sp.y);
-    this.playing = false; this.landed = false; this.poofed = false;
+    this.playing = false; this.landed = false;
     Trail.downStarted = true; // 하강 발자국 기록 시작
   },
   resize() { this.pxX = W / 2.2; this.pxY = H / 1.55; this.clampCam(); },
@@ -2001,7 +2004,7 @@ const Ch5Scene = {
     if (!this.landed) M.baseFace = h < 0.7 ? 'hot' : h < 1.5 ? 'normal' : 'cloud';
     // 구름 옷 증발
     if (this.playing && M.coat && h < 1.75) {
-      M.coat = false; this.poofed = true;
+      M.coat = false;
       spawnParticles(M.x, M.y, 18, ['#FFFFFF', '#EAF3FB'], 120, 0.9, -20);
       toast('구름 옷이 사르르… (내려가며 증발!)', true, 1800);
     }
@@ -2311,13 +2314,13 @@ const ch6 = {
    7장 — 에필로그: 하늘의 성격 (안정도 자유 실험)
    ============================================================ */
 const Ch7Scene = {
-  map: null, gamma: 8, simV: 0, h: 0, pokeIdx: 0, verdict: '', verdictT: 0,
-  atTop: false, settled: true, cloudGrow: 0, stratus: 0,
+  map: null, gamma: 8, simV: 0, h: 0, pokeIdx: 0, verdict: '',
+  settled: true, cloudGrow: 0, stratus: 0,
   enter() {
     this.map = vertMap(2.3);
     M.visible = true; M.coat = false; M.baseFace = 'normal';
     M.place(W * 0.46, this.map.kmToY(0.02));
-    this.simV = 0; this.h = 0.02; this.verdict = ''; this.atTop = false; this.settled = true;
+    this.simV = 0; this.h = 0.02; this.verdict = ''; this.settled = true;
     this.cloudGrow = 0; this.stratus = 0;
     this.readout();
   },

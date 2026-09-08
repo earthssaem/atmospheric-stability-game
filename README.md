@@ -68,8 +68,12 @@
 물리 계산이 교과서 값과 일치하는지 검증합니다 (`index.html`의 PHYSICS 블록을 그대로 추출해 실행):
 
 ```bash
-node tests/physics.test.mjs
+npm test            # 물리 단위 테스트 (의존성 없음)
+npm install         # (선택) playwright 설치 후
+npm run test:e2e    # headless Chromium 으로 전 챕터 관통 스모크 테스트
 ```
+
+E2E 는 시스템 크로미움을 쓰려면 `CHROMIUM_PATH=/path/to/chrome npm run test:e2e` 로 지정할 수 있습니다.
 
 검증 케이스: 0.5km→15℃/11℃ · 1.0km→10℃=10℃(응결) · 2.0km→5℃ · 하강 후 지표→25℃/9℃ · 안정도 경계(γ 5/10)
 · 발자국 경로(maxUpAlt=1.5 → (20,0)→(10,1)→(7.5,1.5), 이슬점선 합체 · 하강 (5,2)→(25,0)/(9,0)).
