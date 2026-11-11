@@ -31,7 +31,7 @@ git checkout <작업-브랜치>
 
 ## 지켜야 할 것
 
-- 단일 `index.html`(HTML·CSS·JS·Canvas/인라인 SVG, 사운드는 Web Audio로 생성). 외부 라이브러리·이미지·음원 없음 — 글꼴만 Google Fonts(Jua)와 jsDelivr(Pretendard)에서(없어도 동작).
+- 단일 `index.html`(HTML·CSS·JS·Canvas/인라인 SVG, 사운드는 Web Audio로 생성). 외부 라이브러리·이미지·음원 없음 — 글꼴만 Google Fonts(Jua · Gowun Dodum)와 jsDelivr(Pretendard)에서(없어도 동작). 처음 화면은 딱딱하지 않게 제목·버튼 Jua, 안내 글 Gowun Dodum을 씁니다.
 - 개인정보 입력, 쿠키·서버 전송·분석 도구 금지. 사용자 요청으로 **이 기기의 localStorage에만** 진행 장면·관찰 기록·예상(`S.rec`)·발자국·소리/대사/움직임 설정을 저장합니다(키 `mungge-sky-journey`, `Store` 한곳에서만). 처음 화면에 ‘이 기기의 브라우저에 진행 상황이 저장됩니다.’를 표시하고, 기록 지우기·처음 시작 전에는 확인합니다. 저장할 수 없는 환경에서도 그대로 진행돼야 합니다.
 - 과학 수치(`RATE`, `SCENARIO`, 감률·응결 고도·상대 습도·푄·기압·부피 비·응결 비율 계산)는 `// ==PHYSICS-START==` ~ `// ==PHYSICS-END==` 블록 한곳에서만 정의합니다(교과서 값, 테스트가 이 블록을 추출해 검증). 조작 빠르기·크기 과장 배수는 맨 위 `TUNING`에만 둡니다.
 - 교과서(p.92~96) 용어와 그림 Ⅲ-13의 구간별 값(불포화/포화, −10·−5·+10 ℃/km, 이슬점 −2·−5·+2 ℃/km, 상대 습도 증가·일정(100%)·감소)과 어긋나지 않게 합니다. 모형 가정은 ‘풍상측 강수 → 풍하측 불포화 하강’입니다.

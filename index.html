@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="뭉게의 하늘 여행">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <!-- 설명·수치·버튼·그래프용 읽기 쉬운 글꼴 (못 불러오면 기기 기본 글꼴) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
@@ -24,6 +24,7 @@
     --r:16px; --rs:12px; --bw:2px; --shadow:0 2px 10px rgba(120,90,60,.12);
     --f-ui:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
     --f-deco:'Jua','Pretendard Variable',Pretendard,sans-serif;   /* 제목·이름·짧은 감정 표현만 */
+    --f-soft:'Gowun Dodum','Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;   /* 처음 화면의 부드러운 안내 글 */
   }
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body {
@@ -289,6 +290,15 @@
   .cmpCol .obsT { width:100%; }
   .pSvg { width:min(150px,100%); height:auto; display:block; margin:0 auto; }
   .cmpGraph .bg { width:100%; }
+  /* 처음 화면: 딱딱하지 않게 — 제목·버튼은 Jua, 안내 글은 Gowun Dodum */
+  .panel.titleP { font-family:var(--f-soft); }
+  .panel.titleP .titleSub { font-family:var(--f-soft); font-weight:700; font-size:clamp(16px,2.5vh,20px); letter-spacing:.3px; color:#8C6A55; }
+  .panel.titleP h1 { letter-spacing:1px; }
+  .panel.titleP .startBtns .btn { font-family:var(--f-deco); font-weight:normal; font-size:clamp(20px,3vh,24px); letter-spacing:.5px; border-radius:18px; }
+  .panel.titleP .startBtns .btn small { font-family:var(--f-soft); font-weight:700; letter-spacing:0; }
+  .panel.titleP .row2 .btn { font-family:var(--f-deco); font-weight:normal; }
+  .panel.titleP .saveNote, .panel.titleP footer { font-family:var(--f-soft); }
+  .panel.titleP .saveNote { font-size:15px !important; color:#8C7466 !important; }
   .titleFace { width:min(176px,24vh); margin:0 auto; }
   .titleFace svg { display:block; width:100%; height:auto; overflow:visible; }
   .titleFace .mg { animation:floaty 3.2s ease-in-out infinite; }
@@ -2860,7 +2870,7 @@ function showTitle() {
     </div>
     ${extra ? `<div class="row2">${extra}</div>` : ''}
     <p class="saveNote">이 기기의 브라우저에 진행 상황이 저장됩니다.<br><small>개인정보는 받지 않아요 · 소리 없이도 진행할 수 있어요 · 오른쪽 위 ⚙️에서 설정</small></p>
-    ${FOOTER_HTML}`);
+    ${FOOTER_HTML}`, 'titleP');
   onClick('newBtn', () => {
     if (!hasSave()) { AudioSys.sClear(); Trail.reset(); startChapter(0); return; }
     confirmBox('처음부터 시작할까요?', '저장된 진행 상황과 관찰 기록이 지워져요.', '처음부터 시작', () => {
