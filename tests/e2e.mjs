@@ -35,9 +35,16 @@ async function toChapter(n, timeoutMs = 20000) {
     const st = await page.evaluate(() => ({
       ch: S.chapter, dlg: S.dialogActive, paused: S.paused,
       btns: ['mapNextBtn', 'toGraphBtn', 'graphDoneBtn'].filter(id => document.getElementById(id)),
+      pred: !!document.querySelector('.predOpts .btn'),
+      table: !!document.getElementById('tableDoneBtn'),
     }));
     if (st.ch === n && !st.dlg && !st.paused) return;
     if (st.dlg) await tapDialog();
+    else if (st.pred) await page.evaluate(() => {   // 예측 질문: 정답 고르기
+      const P = PREDICTIONS[S.chapter];
+      document.querySelector(`.predOpts .btn[data-i="${P.ans}"]`).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    else if (st.table) await page.evaluate(() => { Fig13.solveAll(); document.getElementById('tableDoneBtn').click(); });
     else if (st.btns.length) await press(st.btns[0]);
     await page.waitForTimeout(150);
   }
@@ -223,7 +230,13 @@ await step('5장: 착지 존 저속 착지 (지표 25℃/9℃) → 6장', async 
   await page.waitForTimeout(800);
   const m = await meters();
   if (!m.T.startsWith('25.0') || !m.Td.startsWith('9.0')) throw new Error(JSON.stringify(m));
-  await toChapter(6);
+  // 6장 비교 카드가 뜰 때까지 (대사·여정 지도만 넘김 — 비교 카드·표는 다음 단계에서 직접 검증)
+  for (let i = 0; i < 120 && !(await page.evaluate(() => !!document.getElementById('toGraphBtn'))); i++) {
+    const st = await page.evaluate(() => ({ dlg: S.dialogActive, map: !!document.getElementById('mapNextBtn') }));
+    if (st.dlg) await tapDialog(); else if (st.map) await press('mapNextBtn');
+    await page.waitForTimeout(120);
+  }
+  if (await page.evaluate(() => S.chapter) !== 6) throw new Error('6장 진입 실패');
 });
 
 await step('압축: 착지 후 몸 크기 원래대로 (r<50px)', async () => {
@@ -242,52 +255,109 @@ await step('발자국: 하강 기록 (minDownAlt≈0, 분홍 하강선)', async 
   if (!r.dDn || !r.dDn.startsWith('M')) throw new Error('하강선 미기록');
 });
 
-await step('6장: 비교 카드 + 그래프 리플레이 → 7장', async () => {
+await step('6장: 비교 카드(상대 습도 60%→36%) + 그래프 리플레이', async () => {
   if (await miniGraphOn()) throw new Error('6장에서 미니 그래프가 숨겨져야 함');
-  await toChapter(7, 30000); // toChapter 가 toGraphBtn/graphDoneBtn 도 눌러 줌
-  const panelOn = await page.evaluate(() => document.getElementById('simPanel').classList.contains('on'));
-  if (!panelOn) throw new Error('시뮬레이터 패널 미표시');
+  await page.waitForSelector('#toGraphBtn', { timeout: 15000 });
+  const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
+  if (!txt.includes('60%') || !txt.includes('36%')) throw new Error('비교 카드에 상대 습도 없음');
+  await press('toGraphBtn');
+  await page.waitForSelector('#graphDoneBtn', { timeout: 5000 });
+  await press('graphDoneBtn');
+});
+
+await step('6장: 그림 Ⅲ-13 표 — 틀린 카드는 안 들어가고 힌트, 맞는 카드는 채워짐, 다 채워야 계속', async () => {
+  await page.waitForSelector('#tableDoneBtn', { timeout: 5000 });
+  const r = await page.evaluate(() => {
+    const wrong = Fig13.chips.findIndex(c => c.t === '포화');          // ① 공기 상태 칸(정답: 불포화)에 '포화'
+    Fig13.pickChip(wrong); Fig13.pickCell(0, 0);
+    const afterWrong = { filled: Fig13.filled[0][0], hint: document.getElementById('f13hint').textContent, m: Fig13.mistakes };
+    const right = Fig13.chips.findIndex(c => c.t === '불포화' && !c.used);
+    Fig13.pickCell(0, 0); Fig13.pickChip(right);                         // 칸 먼저 → 카드
+    const afterRight = Fig13.filled[0][0];
+    const disabledBefore = document.getElementById('tableDoneBtn').disabled;
+    Fig13.solveAll();
+    return { afterWrong, afterRight, disabledBefore, disabledAfter: document.getElementById('tableDoneBtn').disabled };
+  });
+  if (r.afterWrong.filled || r.afterWrong.m !== 1 || !r.afterWrong.hint.includes('불포화')) throw new Error('오답 처리: ' + JSON.stringify(r.afterWrong));
+  if (!r.afterRight) throw new Error('정답 카드가 안 들어감');
+  if (!r.disabledBefore || r.disabledAfter) throw new Error('계속 버튼 활성 조건 이상 ' + JSON.stringify(r));
+  await page.evaluate(() => document.getElementById('tableDoneBtn').click());
+});
+
+await step('6장 → 7장 푄 실험실 (패널 표시, 미니 그래프 숨김)', async () => {
+  await toChapter(7, 30000);
+  const on = await page.evaluate(() => document.getElementById('labPanel').classList.contains('on'));
+  if (!on) throw new Error('실험실 패널 미표시');
   if (await miniGraphOn()) throw new Error('7장에서 미니 그래프가 숨겨져야 함');
 });
 
-await step('7장: γ=12 쿡 → 절대 불안정(계속 상승)', async () => {
-  await page.evaluate(() => { Ch7Scene.setGamma(12); Ch7Scene.poke(); });
-  await page.waitForFunction(() => Ch7Scene.verdict !== '', null, { timeout: 8000 });
-  const v = await page.evaluate(() => Ch7Scene.verdict);
-  if (v !== 'unstable') throw new Error(`verdict=${v}`);
+const labSend = async (Td, Mk, guess) => {
+  await page.evaluate(([Td, Mk, guess]) => { Ch7Scene.setCond(Td, Mk); Ch7Scene.setGuess(guess); Ch7Scene.send(); }, [Td, Mk, guess]);
+  await page.waitForFunction(() => Ch7Scene.result, null, { timeout: 10000 });
+  return page.evaluate(() => ({ arr: Ch7Scene.result.arrT, cloud: Ch7Scene.result.cloud, m: { ...Ch7Scene.missions },
+    read: document.getElementById('labRead').textContent, meterT: document.querySelector('#mT .val').textContent }));
+};
+await step('7장: 이슬점 16℃·산 2.5 km, 예측 30℃ → 도착 30℃ (예측 성공, 30℃ 미션)', async () => {
+  const r = await labSend(16, 2.5, 30);
+  if (r.arr !== 30 || !r.cloud || !r.m.hot30) throw new Error(JSON.stringify(r));
+  if (!r.read.includes('예측 성공')) throw new Error(r.read);
+  if (!r.meterT.startsWith('30.0')) throw new Error('계기판이 도착 기온이 아님: ' + r.meterT);
+});
+await step('7장: 이슬점 4℃·산 1.5 km → 구름 없음, 도착 = 출발 20℃ (푄 없음 미션, 예측 2회)', async () => {
+  const r = await labSend(4, 1.5, 20);
+  if (r.arr !== 20 || r.cloud || !r.m.noFoehn || !r.m.guess2) throw new Error(JSON.stringify(r));
+  if (!r.read.includes('푄 없음')) throw new Error(r.read);
 });
 
-await step('7장: γ=4 쿡 → 절대 안정(제자리 복귀)', async () => {
-  await page.evaluate(() => {
-    Ch7Scene.setGamma(4);
-    M.place(M.x, Ch7Scene.map.kmToY(0));
-    Ch7Scene.h = 0; Ch7Scene.simV = 0; Ch7Scene.settled = true;
-    Ch7Scene.poke();
-  });
-  await page.waitForFunction(() => Ch7Scene.verdict !== '', null, { timeout: 12000 });
-  const v = await page.evaluate(() => Ch7Scene.verdict);
-  if (v !== 'stable') throw new Error(`verdict=${v}`);
-});
-
-await step('7장: γ=8, 1.9km에서 놓기 → 조건부 상승', async () => {
-  await page.evaluate(() => {
-    Ch7Scene.setGamma(8);
-    M.place(M.x, Ch7Scene.map.kmToY(1.9));
-    Ch7Scene.h = 1.9; Ch7Scene.settled = false; Ch7Scene.simV = 0; Ch7Scene.verdict = '';
-  });
-  await page.waitForFunction(() => Ch7Scene.verdict !== '', null, { timeout: 8000 });
-  const v = await page.evaluate(() => Ch7Scene.verdict);
-  if (v !== 'unstable') throw new Error(`verdict=${v}`);
-});
-
-await step('여행 끝내기 → 수료 화면 (남은 하트 표시)', async () => {
-  await press('simEndBtn');
-  await page.waitForSelector('#toTitleBtn', { timeout: 5000 });
+await step('여행 끝내기 → 수료 화면 (남은 하트 · 보너스 버튼)', async () => {
+  await press('labEndBtn');
+  await page.waitForSelector('#bonusBtn', { timeout: 5000 });
   const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
   if (!txt.includes('남은 하트')) throw new Error('하트 표시 없음');
 });
 
-await step('처음 화면 + 이어하기 활성', async () => {
+await step('보너스(대기 안정도) 진입: 시뮬레이터 패널', async () => {
+  await press('bonusBtn');
+  await toChapter(8, 20000);
+  const panelOn = await page.evaluate(() => document.getElementById('simPanel').classList.contains('on'));
+  if (!panelOn) throw new Error('시뮬레이터 패널 미표시');
+});
+
+await step('보너스: γ=12 쿡 → 절대 불안정(계속 상승)', async () => {
+  await page.evaluate(() => { Ch8Scene.setGamma(12); Ch8Scene.poke(); });
+  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 8000 });
+  const v = await page.evaluate(() => Ch8Scene.verdict);
+  if (v !== 'unstable') throw new Error(`verdict=${v}`);
+});
+
+await step('보너스: γ=4 쿡 → 절대 안정(제자리 복귀)', async () => {
+  await page.evaluate(() => {
+    Ch8Scene.setGamma(4);
+    M.place(M.x, Ch8Scene.map.kmToY(0));
+    Ch8Scene.h = 0; Ch8Scene.simV = 0; Ch8Scene.settled = true;
+    Ch8Scene.poke();
+  });
+  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 12000 });
+  const v = await page.evaluate(() => Ch8Scene.verdict);
+  if (v !== 'stable') throw new Error(`verdict=${v}`);
+});
+
+await step('보너스: γ=8, 1.9km에서 놓기 → 조건부 상승', async () => {
+  await page.evaluate(() => {
+    Ch8Scene.setGamma(8);
+    M.place(M.x, Ch8Scene.map.kmToY(1.9));
+    Ch8Scene.h = 1.9; Ch8Scene.settled = false; Ch8Scene.simV = 0; Ch8Scene.verdict = '';
+  });
+  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 8000 });
+  const v = await page.evaluate(() => Ch8Scene.verdict);
+  if (v !== 'unstable') throw new Error(`verdict=${v}`);
+});
+
+await step('보너스 끝내기 → 수료 화면(보너스 표시) → 처음 화면 + 이어하기', async () => {
+  await press('simEndBtn');
+  await page.waitForSelector('#toTitleBtn', { timeout: 5000 });
+  const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
+  if (!txt.includes('대기 안정도(보너스)')) throw new Error('보너스 표시 없음');
   await press('toTitleBtn');
   await page.waitForSelector('#contBtn', { timeout: 5000 });
 });
@@ -383,13 +453,14 @@ await step('대화가 끝나면 뭉게 표정이 그 장의 기본 표정으로 
   if (r.face !== r.base) throw new Error(JSON.stringify(r));
 });
 
-await step('7장: γ=8에서 되돌아오면 자유 대류 고도(1.7 km) 안내', async () => {
+await step('보너스: γ=8에서 되돌아오면 자유 대류 고도(1.7 km) 안내', async () => {
   await page.evaluate(() => {
-    Ch7Scene.setGamma(8);
-    M.place(M.x, Ch7Scene.map.kmToY(0)); Ch7Scene.h = 0; Ch7Scene.simV = 0; Ch7Scene.settled = true;
-    Ch7Scene.poke();
+    startChapter(8, true);
+    Ch8Scene.setGamma(8);
+    M.place(M.x, Ch8Scene.map.kmToY(0)); Ch8Scene.h = 0; Ch8Scene.simV = 0; Ch8Scene.settled = true;
+    Ch8Scene.poke();
   });
-  await page.waitForFunction(() => Ch7Scene.verdict !== '', null, { timeout: 12000 });
+  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 12000 });
   const txt = await page.evaluate(() => document.getElementById('stabRead').textContent);
   if (!txt.includes('1.7 km')) throw new Error(txt);
 });
@@ -425,6 +496,63 @@ await step('세로 화면(회전 안내)일 때 게임 시간 정지', async () 
   const t2 = await page.evaluate(() => S.time);
   if (t1 - t0 > 0.05) throw new Error(`세로 화면에서 시간 ${(t1 - t0).toFixed(2)}초 흐름`);
   if (t2 <= t1) throw new Error('가로로 돌아온 뒤 다시 흐르지 않음');
+});
+
+// ===================== v1.4 교과서 연계 검증 =====================
+await step('계기판: 상대 습도 60% · 불포화 상태 → 4장 정상은 포화(100%)', async () => {
+  await page.evaluate(() => { S.hearts = 5; startChapter(0, true); });
+  await page.waitForTimeout(200);
+  const a = await page.evaluate(() => ({ rh: document.querySelector('#mRH .val').textContent, air: document.getElementById('airState').textContent }));
+  if (!a.rh.startsWith('60') || !a.air.includes('불포화')) throw new Error(JSON.stringify(a));
+  await page.evaluate(() => startChapter(4, true));
+  await page.waitForTimeout(200);
+  const b = await page.evaluate(() => ({ rh: document.querySelector('#mRH .val').textContent, air: document.getElementById('airState').textContent }));
+  if (!b.rh.startsWith('100') || !b.air.includes('포화 상태')) throw new Error(JSON.stringify(b));
+});
+
+await step('1장: 플레이 전에 예측 질문 → 오답 선택 → 클리어 후 여정 지도에 예측 비교 + 교과서 용어 카드', async () => {
+  await page.evaluate(() => { S.pred = {}; startChapter(1, false); });
+  for (let i = 0; i < 20 && !(await page.evaluate(() => !!document.querySelector('.predOpts .btn'))); i++) {
+    await tapDialog(); await page.waitForTimeout(80);
+  }
+  const playingBefore = await page.evaluate(() => Ch1Scene.playing);
+  if (playingBefore) throw new Error('예측 전에 플레이가 시작됨');
+  await page.evaluate(() => document.querySelector('.predOpts .btn[data-i="0"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+  for (let i = 0; i < 20 && await page.evaluate(() => S.dialogActive); i++) { await tapDialog(); await page.waitForTimeout(60); }
+  await page.waitForFunction(() => Ch1Scene.playing, null, { timeout: 5000 });
+  await page.evaluate(() => { M.place(M.x, Ch1Scene.map.kmToY(1.0)); });
+  await page.waitForFunction(() => !Ch1Scene.playing, null, { timeout: 8000 });
+  for (let i = 0; i < 30 && !(await page.evaluate(() => !!document.getElementById('mapNextBtn'))); i++) { await tapDialog(); await page.waitForTimeout(100); }
+  const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
+  if (!txt.includes('내 예측: 19℃') || !txt.includes('🤔')) throw new Error('예측 비교 없음');
+  if (!txt.includes('건조 단열 감률') || !txt.includes('이슬점 감률')) throw new Error('용어 카드 없음');
+});
+
+await step('3장: 상승 응결 고도 위에서는 영동 쪽 비탈에 비가 내림', async () => {
+  await page.evaluate(() => { startChapter(3, true); const p = Ch3Scene.w2s(1.5, Ch3Scene.bandCenter(1.5)); M.place(p.x, p.y); });
+  await page.waitForTimeout(300);
+  for (let i = 0; i < 10 && await page.evaluate(() => S.dialogActive); i++) { await tapDialog(); await page.waitForTimeout(60); } // 감률 변화 대사
+  await page.evaluate(() => { const p = Ch3Scene.w2s(1.5, Ch3Scene.bandCenter(1.5)); M.place(p.x, p.y); });
+  await page.waitForTimeout(500);
+  const n = await page.evaluate(() => Ch3Scene.drops.length);
+  if (n < 1) throw new Error(`빗방울 ${n}개`);
+  await page.evaluate(() => { const p = Ch3Scene.w2s(0.3, 0.75); M.place(p.x, p.y); Ch3Scene.drops = []; Ch3Scene.playing = false; });
+  await page.waitForTimeout(400);
+  const n2 = await page.evaluate(() => Ch3Scene.drops.length);
+  if (n2 > 0) throw new Error(`응결 고도 아래(0.75 km)에서도 비 ${n2}개`);
+});
+
+await step('보너스: 층운은 응결 고도(1.0 km) 위에만 그림', async () => {
+  await page.evaluate(() => { startChapter(8, true); Ch8Scene.setGamma(4); Ch8Scene.stratus = 1; });
+  await page.waitForTimeout(200);
+  // 응결 고도선 아래 띠(0.3~0.9 km)에 층운 색(#EDF2F5)이 없어야 함
+  const below = await page.evaluate(() => {
+    const y0 = Ch8Scene.map.kmToY(0.9), y1 = Ch8Scene.map.kmToY(0.3), x = Math.round(innerWidth * 0.4);
+    const d = ctx.getImageData(x * DPR, y0 * DPR, 1, (y1 - y0) * DPR).data;
+    let hit = 0; for (let i = 0; i < d.length; i += 4) if (d[i] === 237 && d[i + 1] === 242 && d[i + 2] === 245) hit++;
+    return hit;
+  });
+  if (below > 0) throw new Error(`응결 고도 아래에 층운 픽셀 ${below}`);
 });
 
 await step('?ch=5: 처음 화면의 "5장부터 시작" → 앞 장 발자국·지도 라벨 채운 채 5장', async () => {

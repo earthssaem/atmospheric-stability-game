@@ -7,7 +7,7 @@ const m = html.match(/\/\/ ==PHYSICS-START==([\s\S]*?)\/\/ ==PHYSICS-END==/);
 if (!m) { console.error('PHYSICS 블록을 찾을 수 없습니다'); process.exit(1); }
 
 const api = new Function(
-  m[1] + '\nreturn { RATE, SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, trailUpPoints, trailDownPoints };'
+  m[1] + '\nreturn { RATE, SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints };'
 )();
 
 let fails = 0;
@@ -17,7 +17,7 @@ function eq(name, got, want, tol = 1e-9) {
   if (!ok) fails++;
 }
 
-const { SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, trailUpPoints, trailDownPoints } = api;
+const { SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints } = api;
 function eqPts(name, got, want) {
   const ok = got.length === want.length &&
     got.every((p, i) => Math.abs(p[0] - want[i][0]) < 1e-9 && Math.abs(p[1] - want[i][1]) < 1e-9);
@@ -94,6 +94,30 @@ eq('LFC γ=5 (경계) = 없음', lfcHeight(20, 12, 5), null);
 const L8 = lfcHeight(20, 12, 8);
 eq('γ=8: LFC+0.01 km에서 덩어리 > 주위', riseState(20, 12, L8 + 0.01).T > envTemp(20, 8, L8 + 0.01), true);
 eq('γ=8: LFC−0.01 km에서 덩어리 < 주위', riseState(20, 12, L8 - 0.01).T < envTemp(20, 8, L8 - 0.01), true);
+
+// --- 상대 습도 (그림 Ⅲ-13: 오를 때 증가 → 구름 속 100% 일정 → 내려올 때 감소) ---
+eq('상대 습도: 출발 20℃/12℃ ≈ 60%', relHumidity(20, 12), 60.0, 0.5);
+eq('상대 습도: 0.5 km 15℃/11℃ ≈ 77% (증가)', relHumidity(15, 11), 77.0, 0.5);
+eq('상대 습도: 응결 고도 10℃/10℃ = 100%', relHumidity(10, 10), 100);
+eq('상대 습도: 정상 5℃/5℃ = 100% (일정)', relHumidity(5, 5), 100);
+eq('상대 습도: 도착 25℃/9℃ ≈ 36% (감소)', relHumidity(25, 9), 36.2, 0.5);
+
+// --- 푄 왕복 (7장 푄 실험실) — 도착 기온 상승 = 5 × (산 높이 − 응결 고도) ---
+const f1 = foehnTrip(20, 12, 2.0);
+eq('푄(20/12, 산 2 km): 구름 생김', f1.cloud, true);
+eq('푄(20/12, 산 2 km): 정상 5℃', f1.topT, 5);
+eq('푄(20/12, 산 2 km): 도착 25℃', f1.arrT, 25);
+eq('푄(20/12, 산 2 km): 도착 이슬점 9℃', f1.arrTd, 9);
+const f2 = foehnTrip(20, 16, 2.5);
+eq('푄(20/16, 산 2.5 km): H 0.5 km, 도착 30℃ = 20 + 5×(2.5−0.5)', f2.arrT, 30);
+const f3 = foehnTrip(20, 4, 1.5);
+eq('푄(20/4, 산 1.5 km): H 2.0 km ≥ 산 → 구름 없음', f3.cloud, false);
+eq('푄(20/4, 산 1.5 km): 도착 = 출발 20℃ (푄 없음)', f3.arrT, 20);
+eq('푄(20/4, 산 1.5 km): 도착 이슬점 = 출발 4℃', f3.arrTd, 4);
+for (const [Td, M] of [[10, 2.0], [14, 3.0], [18, 1.2], [8, 2.6]]) {
+  const f = foehnTrip(20, Td, M);
+  eq(`푄 일반식 Td=${Td}, 산 ${M} km: ΔT = 5×(M−H)`, f.dT, Math.max(0, 5 * (M - f.H)), 1e-9);
+}
 
 console.log(fails === 0 ? '\n모든 테스트 통과! 🎉' : `\n${fails}개 실패`);
 process.exit(fails === 0 ? 0 : 1);
