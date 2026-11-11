@@ -1,6 +1,6 @@
 {
   "name": "mungge-sky-journey",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "뭉게의 하늘 여행 — 대기 안정도와 강수 이야기 중심 학습 웹앱 (1부 산을 건너는 뭉게 · 2부 놓아주면 어디로 갈까?, 단일 HTML)",
   "private": true,
   "type": "module",

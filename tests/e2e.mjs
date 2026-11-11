@@ -220,6 +220,18 @@ await step('관찰 기록 창: 대화 중에 열고 닫아도 그대로 · 여�
   if (after.idx !== before.idx || after.ch !== before.ch || !after.act || after.p) throw new Error(JSON.stringify({ before, after }));
 });
 
+await step('🏠 버튼: 대화 중에도 눌림 → 확인 창 → 계속하기면 그대로 이어짐', async () => {
+  await until(() => S.dialogActive);
+  const idx = await ev(() => Dialog.idx);
+  const hb = await (await page.$('#homeBtn')).boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.waitForSelector('#sheet.on');
+  if (!(await ev(() => document.getElementById('sheet').textContent.includes('처음 화면으로 갈까요?')))) throw new Error('확인 창 없음');
+  await shot('05c-home');
+  await click('#homeNoBtn');
+  const r = await ev(() => ({ idx: Dialog.idx, act: S.dialogActive, p: S.paused, scr: S.screen }));
+  if (r.idx !== idx || !r.act || r.p || r.scr !== 'play') throw new Error(JSON.stringify(r));
+});
 await step('2장 정상까지: 끌기로도 이동 · 응결 뒤에도 팽창 계속 · 응결열 설명', async () => {
   await dialogs();
   await page.waitForSelector('#holdBtn');
@@ -440,6 +452,14 @@ await step('새로고침 뒤 설정 유지 · 처음 시작 전 확인 창 · �
   await click('#newBtn');
   if (!(await overlayText()).includes('처음부터 시작할까요?')) throw new Error('지우기 전 확인 창 없음');
   await click('#cfNo');
+  // 이어 하기 → 대화 중 🏠 → 처음 화면으로
+  await click('#contBtn');
+  await until(() => S.dialogActive);
+  const hb = await (await page.$('#homeBtn')).boundingBox();
+  await page.mouse.click(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await click('#homeYesBtn');
+  if ((await ev(() => S.screen)) !== 'title' || !(await overlayText()).includes('처음 시작')) throw new Error('처음 화면으로 돌아가지 않음');
+  if (!(await ev(() => !!document.querySelector('.titleFace svg .mg')))) throw new Error('처음 화면 뭉게 캐릭터 없음');
   await noHScroll();
   if (errors.length) throw new Error(errors.join(' | '));
 });
