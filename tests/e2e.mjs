@@ -84,6 +84,8 @@ await step('처음 화면: 처음 시작 · 이어 하기(저장 없으면 꺼�
   await shot('00-title');
   const t = await overlayText();
   for (const k of ['처음 시작', '이어 하기', '장면 선택', '교사용 보기', '이 기기의 브라우저에 진행 상황이 저장됩니다.', '연경쌤의 지구과학 실험실 둘러보기']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  const ic = await ev(() => ({ svg: !!document.querySelector('link[rel="icon"][type="image/svg+xml"]'), apple: !!document.querySelector('link[rel="apple-touch-icon"]') }));
+  if (!ic.svg || !ic.apple) throw new Error('웹앱 아이콘 없음 ' + JSON.stringify(ic));
   if (!(await ev(() => document.getElementById('contBtn').disabled))) throw new Error('저장이 없는데 이어 하기가 켜져 있음');
   await noHScroll();
 });
@@ -132,7 +134,7 @@ await step('0장 첫 상승: 별빛 없이 첫 조작으로 상승 → 몸이 �
   await shot('02-h05');
   await notCovered();
   const t2 = await dialogs();
-  for (const k of ['어? 몸이 좀 커졌는데?', '그런데 기온은 내려갔네.', '높이 올라오니 주변 기압이 낮아졌어.', '공기가 팽창하면서 주변을 밀어내는 일을 해 기온이 내려가는 거야.']) if (!t2.includes(k)) throw new Error('없음: ' + k);
+  for (const k of ['어? 몸이 좀 커졌는데?', '그런데 기온은 내려갔네.', '높이 올라오니 주변 기압이 낮아졌어.', '공기가 팽창하면서 주변을 밀어내는 일을 해 기온이 내려가는 거야.', '단열 팽창', '건조 단열 감률', '수증기압']) if (!t2.includes(k)) throw new Error('없음: ' + k);
   // 높은 곳에서 머무는 동안 크기 유지
   const sA = await ev(() => M.s); await wait(900);
   if (Math.abs((await ev(() => M.s)) - sA) > 1e-9) throw new Error('멈춰 있는데 크기가 변함');
@@ -181,6 +183,16 @@ await step('새로고침 뒤 이어 하기: 저장된 장면(2장)에서 다시 
   if (r.ch !== 2 || !r.lcl || !r.cond || !r.p1) throw new Error(JSON.stringify(r));
 });
 
+await step('대화 중에도 소리 버튼이 실제로 눌림 (화면 좌표 클릭 · 대화는 넘어가지 않음)', async () => {
+  await until(() => S.dialogActive);
+  const idx = await ev(() => Dialog.idx);
+  const bb = await (await page.$('#muteBtn')).boundingBox();
+  await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  const r = await ev(() => ({ s: S.set.sound, idx: Dialog.idx, act: S.dialogActive }));
+  if (r.s !== false || r.idx !== idx || !r.act) throw new Error(JSON.stringify(r));
+  await page.mouse.click(bb.x + bb.width / 2, bb.y + bb.height / 2);
+  if (!(await ev(() => S.set.sound))) throw new Error('다시 켜지지 않음');
+});
 await step('설정: 대사 바로 표시 · 소리 끄기 (저장됨)', async () => {
   await click('#setBtn');
   await click('#sheet [data-k="typing"][data-v="off"]');
@@ -193,7 +205,9 @@ await step('설정: 대사 바로 표시 · 소리 끄기 (저장됨)', async ()
 await step('관찰 기록 창: 대화 중에 열고 닫아도 그대로 · 여정 지도 번호·목록 · 그래프 점으로 다시 보기', async () => {
   await until(() => S.dialogActive);
   const before = await ev(() => ({ idx: Dialog.idx, ch: S.chapter }));
-  await click('#logBtn');
+  const lb = await (await page.$('#logBtn')).boundingBox();
+  await page.mouse.click(lb.x + lb.width / 2, lb.y + lb.height / 2);
+  await page.waitForSelector('#sheet.on');
   await wait(150); await shot('05-log');
   const t = await ev(() => document.getElementById('sheet').textContent);
   for (const k of ['관찰 기록', '출발 · 영동 바다 위', '응결 시작', '태백산맥', '영서']) if (!t.includes(k)) throw new Error('없음: ' + k);
@@ -223,7 +237,7 @@ await step('2장 정상까지: 끌기로도 이동 · 응결 뒤에도 팽창 �
   if (!(sTop > s1)) throw new Error('응결 뒤 팽창이 멈춤');
   await shot('06-top');
   const t = await dialogs();
-  for (const k of ['전망은 좋은데… 꽤 춥네.', '수증기가 물방울로 변하면서 열을 내놓기 때문이야.']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  for (const k of ['전망은 좋은데… 꽤 춥네.', '수증기가 물방울로 변하면서 열을 내놓기 때문이야.', '숨은열(잠열)', '습윤 단열 감률']) if (!t.includes(k)) throw new Error('없음: ' + k);
   await click('#nextBtn');
 });
 
@@ -248,6 +262,12 @@ await step('4장 내려가기: 같은 높이로 내려가기 전 예상 → 1 km
   if (!(await overlayText()).includes('같은 1.0 km')) throw new Error('하강 전 예상 질문 없음');
   await pickOpt(0);   // 10℃ (틀린 예상)
   await holdUntilStop();
+  // 정상에서 조금 내려온 1.9 km: 물방울이 없으니 곧바로 불포화 (교과서 가정을 직접 확인)
+  const u1 = await ev(() => ({ h: Sim.h, T: Sim.T, Td: Sim.Td, sat: Sim.sat, d: M.drops }));
+  if (Math.abs(u1.h - 1.9) > 1e-6 || Math.abs(u1.T - 6) > 1e-6 || Math.abs(u1.Td - 5.2) > 1e-6 || u1.sat || u1.d !== 0) throw new Error('1.9 km 상태 ' + JSON.stringify(u1));
+  const tu = await dialogs();
+  for (const k of ['벌써 기온이 이슬점보다 높아졌어', '불포화 상태', '만약 내 안에 물방울이 남아 있었다면']) if (!tu.includes(k)) throw new Error('없음: ' + k);
+  await holdUntilStop();
   sD1 = await ev(() => M.s);
   const st = await ev(() => ({ h: Sim.h, T: Sim.T, Td: Sim.Td, d: M.drops }));
   if (st.h !== 1 || st.T !== 15 || st.Td !== 7 || st.d !== 0) throw new Error('하강 1 km 상태 ' + JSON.stringify(st));
@@ -270,7 +290,7 @@ await step('5장 비교: 출발과 도착을 그래프와 함께 나란히 → �
   if (!t0.includes('같은 높이인데, 출발할 때보다 따뜻하잖아?')) throw new Error('도착 비교 반응 없음');
   await page.waitForSelector('#overlay .cmpWrap');
   const t = await overlayText();
-  for (const k of ['출발 · 영동 0 km', '도착 · 영서 0 km', '20℃', '25℃', '9℃']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  for (const k of ['출발 · 영동 0 km', '도착 · 영서 0 km', '20℃', '25℃', '9℃', '구름 속(1~2 km): 1 km에 5℃만 식음', '더 따뜻해진 까닭']) if (!t.includes(k)) throw new Error('없음: ' + k);
   if (!(await ev(() => !!document.querySelector('#overlay .cmpGraph svg')))) throw new Error('비교 그래프 없음');
   await shot('09-compare');
   await click('#cmpNext');
@@ -282,6 +302,11 @@ await step('5장 비교: 출발과 도착을 그래프와 함께 나란히 → �
 await step('6장 관측소 보고: 그림 Ⅲ-13 빈칸은 선택 (채우지 않아도 계속) → 1부 정리', async () => {
   await dialogs();
   await page.waitForSelector('#overlay .f13');
+  if (!(await overlayText()).includes('내 관찰 기록')) throw new Error('빈칸 옆 근거 관찰값 없음');
+  await click('#overlay .blank[data-bi="3"]');
+  const ev3 = await overlayText();
+  for (const k of ['100%', '59%', '36%']) if (!ev3.includes(k)) throw new Error('내려올 때 상대 습도 근거 없음: ' + k);
+  await click('#overlay .blank[data-bi="0"]');
   await click('#overlay .opts .btn[data-o="불포화"]');
   if (!(await overlayText()).includes('맞아!')) throw new Error('빈칸 피드백 없음');
   await shot('10-f13');

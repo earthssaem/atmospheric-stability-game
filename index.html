@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>뭉게의 하늘 여행 — 대기 안정도와 강수</title>
+<!-- 웹앱 아이콘: 반투명한 공기 덩어리 뭉게 (파일 없이 이 문서 안에) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Cdefs%3E%3ClinearGradient id=%22s%22 x1=%220%22 y1=%220%22 x2=%220%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23BFE0F5%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFF1DE%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22b%22 cx=%22.36%22 cy=%22.3%22 r=%22.8%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFFFFF%22/%3E%3Cstop offset=%221%22 stop-color=%22%23DDEBF8%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2264%22 height=%2264%22 rx=%2215%22 fill=%22url(%23s)%22/%3E%3Cpath d=%22M32 8.5c8.6 0 14.4 3.3 18.2 8.6 3.7 5.1 5.3 10.4 5.3 16.2 0 6-2.1 11.4-6.4 15.3C45 52.3 39 55.5 32 55.5s-13-3.2-17.1-6.9c-4.3-3.9-6.4-9.3-6.4-15.3 0-5.8 1.6-11.1 5.3-16.2C17.6 11.8 23.4 8.5 32 8.5z%22 fill=%22url(%23b)%22 stroke=%22%237FA6D2%22 stroke-width=%222.6%22/%3E%3Cellipse cx=%2222.5%22 cy=%2219.5%22 rx=%226.5%22 ry=%223.6%22 fill=%22%23fff%22 transform=%22rotate(-18 22.5 19.5)%22/%3E%3Cpath d=%22M20.5 32.5q3.7-4.6 7.4 0M36.1 32.5q3.7-4.6 7.4 0%22 stroke=%22%2359483F%22 stroke-width=%222.9%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3Ccircle cx=%2216.5%22 cy=%2238.5%22 r=%223.7%22 fill=%22%23F5B4A8%22 opacity=%22.9%22/%3E%3Ccircle cx=%2247.5%22 cy=%2238.5%22 r=%223.7%22 fill=%22%23F5B4A8%22 opacity=%22.9%22/%3E%3Cpath d=%22M26.8 39.2q5.2 5.6 10.4 0%22 stroke=%22%2359483F%22 stroke-width=%222.9%22 fill=%22none%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="180x180" href="data:image/png;base64,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">
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
+<meta name="theme-color" content="#FFF8EF">
+<meta name="apple-mobile-web-app-title" content="뭉게의 하늘 여행">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
@@ -31,7 +37,8 @@
   b { font-weight:700; }
 
   /* ============ 상단: 장면 이름 · 여행 위치 · 보조 조작 ============ */
-  #hud { position:absolute; inset:0; pointer-events:none; z-index:50; }
+  #hud { position:absolute; inset:0; pointer-events:none; }   /* z-index 없음: 안의 요소가 각자 층을 가짐 */
+  a#progress, #meters { z-index:50; }
   .hudCard { background:var(--card); border:var(--bw) solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); }
   a#progress { position:absolute; top:10px; left:12px; padding:6px 14px; display:block; color:inherit; text-decoration:none;
     pointer-events:auto; cursor:pointer; max-width:calc(100% - 210px); }
@@ -43,7 +50,7 @@
   .pdot { width:10px; height:10px; border-radius:50%; background:#EFE2D3; border:1.5px solid #D9C4AE; }
   .pdot.done { background:var(--mint); border-color:#86BE9E; }
   .pdot.cur { background:var(--pri); border-color:#D99364; transform:scale(1.25); }
-  #tools { position:absolute; top:10px; right:12px; display:flex; gap:8px; pointer-events:auto; }
+  #tools { position:absolute; top:10px; right:12px; display:flex; gap:8px; pointer-events:auto; z-index:95; }
   #tools button { width:48px; height:48px; border-radius:var(--r); background:var(--card); border:var(--bw) solid var(--line);
     box-shadow:var(--shadow); font-size:21px; cursor:pointer; }
   #tools button:focus-visible { outline:3px solid var(--pri); }
@@ -89,7 +96,7 @@
   #dialogBox.station #dName { background:#EAF1FA; color:#3D5A86; }
 
   /* ============ 패널 (예측·관찰·기록·처음 화면) ============ */
-  #overlay { position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center; padding:10px; }
+  #overlay { position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center; padding:66px 10px 10px; }
   #overlay.on { display:flex; }
   .panel { background:var(--card); border:var(--bw) solid var(--line); border-radius:20px; box-shadow:0 6px 24px rgba(120,90,60,.16);
     padding:22px 26px; text-align:center; max-width:min(860px, 100%); max-height:100%; overflow:auto; touch-action:pan-y pinch-zoom;
@@ -98,7 +105,7 @@
   .panel h2 { font-family:var(--f-deco); font-weight:normal; font-size:clamp(22px,4vh,30px); color:#9A5634; margin-bottom:8px; }
   .panel h3 { font-size:17px; color:var(--ink); }
   .panel p { font-size:clamp(16px,2.3vh,20px); color:var(--sub); line-height:1.6; }
-  .panel.top { align-self:flex-start; margin-top:72px; }
+  .panel.top { align-self:flex-start; margin-top:8px; }
   .panel.wide { max-width:min(1040px,100%); }
   .btn { font-family:var(--f-ui); font-weight:700; font-size:clamp(17px,2.4vh,21px); color:var(--priInk); cursor:pointer;
     background:var(--pri); border:var(--bw) solid #DE9A6C; border-radius:var(--rs); padding:11px 24px; margin:8px 5px 0;
@@ -232,7 +239,7 @@
   #mgHead { display:flex; align-items:center; gap:6px; margin-bottom:2px; pointer-events:auto; }
   #mgHead #mgTitle { flex:1; margin:0; text-align:left; }
   #mgHead button { font-family:var(--f-ui); font-size:13px; min-height:34px; padding:2px 10px; border-radius:10px; border:1.5px solid var(--line); background:#FFFDF9; color:var(--ink); cursor:pointer; }
-  #miniGraph { top:150px; bottom:auto; pointer-events:auto; }
+  #miniGraph { top:150px; bottom:auto; pointer-events:auto; z-index:72; }
   #miniGraph.folded { width:auto; padding:6px 8px; }
   #miniGraph.folded #mgLegend, #miniGraph.folded #mgSvg { display:none; }
   #mgFold { position:static; width:auto; height:auto; }
@@ -249,7 +256,7 @@
   .hint { font-size:16px !important; color:var(--sub) !important; }
   .note { font-size:14px !important; color:var(--sub) !important; margin-top:8px; line-height:1.55; }
   .row2 .btn { margin:4px; }
-  #sheet { position:absolute; inset:0; z-index:90; display:none; align-items:flex-start; justify-content:center; padding:10px; background:rgba(89,72,63,.18); overflow:auto; }
+  #sheet { position:absolute; inset:0; z-index:90; display:none; align-items:flex-start; justify-content:center; padding:66px 10px 10px; background:rgba(89,72,63,.18); overflow:auto; }
   #sheet.on { display:flex; }
   .sheetPanel { width:min(980px,100%); max-height:none; text-align:left; margin:auto 0; }
   .sheetHead { display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -290,6 +297,11 @@
   .blank { font-family:var(--f-ui); font-size:15px; min-height:36px; padding:2px 10px; border-radius:10px; border:1.5px dashed #D99364; background:#FFF6EC; color:var(--ink); cursor:pointer; }
   .blank.on { outline:3px solid var(--pri); }
   .cmpTbl td.sumCell { color:#A9988A; } .cmpTbl td.filled { background:#FFF4DA; }
+  .f13q { display:grid; grid-template-columns:1fr 1.2fr; gap:12px; align-items:center; text-align:left; margin-top:6px; }
+  .f13q .opts { justify-content:flex-start; }
+  .evT { font-size:clamp(14px,2vh,17px) !important; margin:0; }
+  .evT th, .evT td { padding:4px 8px !important; }
+  .cmpTbl.f13 { font-size:clamp(13px,2vh,17px); }
   .resWrap { max-height:52vh; overflow:auto; }
   .presets { gap:6px !important; }
   .presets button { font-family:var(--f-ui); font-size:14px; min-height:38px; padding:2px 10px; border-radius:10px; border:1.5px solid var(--line); background:#FFFDF9; color:var(--ink); cursor:pointer; }
@@ -303,6 +315,8 @@
     .cmpWrap { grid-template-columns:1fr 1fr; }
     .cmpGraph { grid-column:1 / -1; }
     .concepts { grid-template-columns:1fr; }
+    .f13q { grid-template-columns:1fr; }
+    .evT { width:100%; }
     .btn.hold { min-width:0; width:100%; }
     #actBar { width:calc(100% - 16px); }
   }
@@ -319,7 +333,7 @@
     #miniGraph { width:min(220px, 56vw); }
     .chList, .startBtns { grid-template-columns:1fr; }
     .panel { padding:16px 14px; }
-    .panel.top { margin-top:126px; }
+    .panel.top { margin-top:66px; }
     #toast { top:184px; max-width:calc(100% - 24px); font-size:15px; }
     #miniGraph { top:138px; }
     #dFace { width:48px; height:48px; }
@@ -1016,23 +1030,37 @@ const M = {
     // 몸: 반투명. 테두리 색은 기온에 따라 차가운 파랑 ↔ 따뜻한 주황
     const w = clamp((Sim.T - 5) / 20, 0, 1);
     const edge = `rgb(${Math.round(lerp(110, 214, w))},${Math.round(lerp(150, 140, w))},${Math.round(lerp(200, 100, w))})`;
-    blobPath(c, 0, 0, r, 3, still ? 0 : t, 0.045, 10);
+    bodyPath(c, r, t, still);
     const g = c.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.08, 0, 0, r);
     g.addColorStop(0, 'rgba(255,255,255,.66)'); g.addColorStop(1, 'rgba(214,230,244,.34)');
     c.fillStyle = g; c.fill();
     c.lineWidth = 3; c.strokeStyle = edge; c.stroke();
-    // 안쪽 물방울 + 그 물방울이 모여 보이는 구름 (공기가 구름이 '된' 것이 아니라 공기 안에 물방울이 생김)
+    // 몸 안 구름: 물방울이 모여 보이는 폭신한 구름을 몸 아래쪽에 (얼굴은 가리지 않음).
+    // 공기가 구름으로 '변하는' 게 아니라, 공기 덩어리 안에 물방울이 생겨 구름으로 보임
     if (this.drops > 0) {
-      c.save(); blobPath(c, 0, 0, r - 2, 3, still ? 0 : t, 0.045, 10); c.clip();
       const k = clamp(this.drops / 14, 0, 1);
-      c.fillStyle = `rgba(255,255,255,${0.22 + 0.3 * k})`;
-      [[-0.55, 0.45, 0.42], [0.55, 0.45, 0.42], [0, 0.72, 0.4], [-0.7, -0.2, 0.3], [0.7, -0.2, 0.3]].forEach(([dx, dy, rr], i) => {
-        if (i < 1 + Math.round(4 * k)) { blobPath(c, dx * r, dy * r, rr * r, 11 + i, still ? 0 : t, 0.1, 8); c.fill(); }
+      c.save(); bodyPath(c, r - 1.5, t, still); c.clip();
+      const top = r * (0.6 - 0.2 * k);
+      const cg = c.createLinearGradient(0, top - r * 0.3, 0, r);
+      cg.addColorStop(0, '#FFFFFF'); cg.addColorStop(1, '#E2EDF8');
+      c.fillStyle = cg;
+      c.beginPath();
+      [[-0.66, 0.06, 0.3], [-0.32, -0.04, 0.36], [0.06, -0.08, 0.38], [0.44, -0.02, 0.34], [0.78, 0.08, 0.28]].forEach(([dx, dy, rr], i) => {
+        const wob = still ? 0 : Math.sin(t * 1.3 + i * 1.7) * r * 0.012;
+        const cx = dx * r, cy = top + dy * r + rr * r * 0.85 + wob;
+        c.moveTo(cx + rr * r, cy); c.arc(cx, cy, rr * r, 0, TAU);
       });
-      // 물방울: 얼굴을 가리지 않게 몸 둘레 쪽에 (간격은 몸 크기를 따라 넓어지고, 물방울 크기는 그대로)
-      for (let i = 0; i < this.drops; i++) {
-        const a = i * 2.39996 + 0.4, rr = r * (0.6 + 0.24 * ((i * 7) % 5) / 4);
-        drawDrop(c, Math.cos(a) * rr, Math.sin(a) * rr * 0.92 + (still ? 0 : Math.sin(t * 2 + i) * 1.2), 3.6);
+      c.rect(-r, top + r * 0.3, r * 2, r);
+      c.fill();
+      // 구름 윗면의 옅은 그늘선 (솜 느낌)
+      c.strokeStyle = 'rgba(160,190,220,.45)'; c.lineWidth = 1.5;
+      c.beginPath(); c.arc(-0.32 * r, top - 0.04 * r + 0.36 * r * 0.85, 0.36 * r, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
+      c.beginPath(); c.arc(0.44 * r, top - 0.02 * r + 0.34 * r * 0.85, 0.34 * r, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
+      // 구름 속 작은 물방울 몇 개 (모양으로 구별, 크기 고정)
+      const nd = Math.min(5, 1 + Math.round(this.drops / 3.5));
+      for (let i = 0; i < nd; i++) {
+        const fx = (i - (nd - 1) / 2) * 0.24, fy = 0.3 + 0.12 * ((i * 3) % 2);
+        drawDrop(c, fx * r, Math.min(r * 0.74, top + fy * r) + (still ? 0 : Math.sin(t * 2 + i) * 1), 2.3, '#7FA6D8');
       }
       c.restore();
     }
@@ -1066,15 +1094,20 @@ const M = {
     c.restore();
   },
 };
+// 뭉게 몸 윤곽: 매끈하고 동그란 모양 (숨쉬듯 아주 살짝 움직임)
+function bodyPath(c, r, t, still) {
+  const b = still ? 0 : Math.sin(t * 1.6) * 0.012;
+  c.beginPath(); c.ellipse(0, r * 0.02, r * (1.03 + b), r * (0.97 - b), 0, 0, TAU);
+}
 // 물방울 하나 (크기 고정 — 공기 알갱이와 구별되는 파란 물방울)
-function drawDrop(c, x, y, r) {
+function drawDrop(c, x, y, r, fill = '#4E73A8') {
   c.beginPath();
   c.moveTo(x, y - r * 1.6);
   c.quadraticCurveTo(x + r, y - r * 0.2, x + r, y + r * 0.3);
   c.arc(x, y + r * 0.3, r, 0, Math.PI);
   c.quadraticCurveTo(x - r, y - r * 0.2, x, y - r * 1.6);
   c.closePath();
-  c.fillStyle = '#4E73A8'; c.fill();
+  c.fillStyle = fill; c.fill();
   c.lineWidth = 1.2; c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke();
 }
 
@@ -1473,7 +1506,7 @@ const OBS = {
   start:  { n: 1, label: '출발 · 영동 바다 위', h: 0,   up: true,  note: '기온이 이슬점보다 높은 불포화 상태' },
   h05:    { n: 2, label: '처음 올라간 곳',      h: 0.5, up: true,  note: '몸이 커지고 기온이 5℃ 내려감 (이슬점은 1℃)' },
   lcl:    { n: 3, label: '응결 시작',          h: H0,  up: true,  note: '기온 = 이슬점 → 몸 안에 물방울이 생김' },
-  top:    { n: 4, label: '산 정상',            h: 2,   up: true,  note: '구름 속에서는 1 km에 5℃씩 천천히 식음' },
+  top:    { n: 4, label: '산 정상',            h: 2,   up: true,  note: '구름 속에서는 숨은열(잠열) 때문에 1 km에 5℃씩 천천히 식음' },
   rain:   { n: 5, label: '영동 쪽 비탈에 비',   h: 2,   up: true,  note: '물방울이 자라 비로 떨어짐 → 함께 넘어가는 수증기 감소' },
   d1:     { n: 6, label: '내려가는 중',         h: 1,   up: false, note: '같은 높이인데 올라올 때(10℃)보다 따뜻함' },
   arrive: { n: 7, label: '하강 후 도착 · 영서',  h: 0,   up: false, note: '출발보다 5℃ 따뜻하고 이슬점은 3℃ 낮음' },
@@ -1641,11 +1674,7 @@ const J = {
     // 높이 안내선
     for (let h = 0.5; h <= 2.0 + 1e-9; h += 0.5) hLine(c, Y(h), 0, W, 'rgba(89,72,63,.10)', [], 1);
     const showH = Trail.condensed || this.u >= H0 - 1e-6;
-    if (showH) {
-      hLine(c, Y(H0), 0, W, 'rgba(78,115,168,.65)', [10, 8], 2);
-      if (g.narrow) tag(c, `구름 시작 ${kf(H0)} km`, W - 8, Y(H0) - 16, { align: 'right', color: '#3D5A86', px: 13 });
-      else tag(c, `${kf(H0)} km · 구름이 생기기 시작하는 높이`, 96, Y(H0) - 18, { color: '#3D5A86', px: 14 });
-    }
+    if (showH) hLine(c, Y(H0), 0, W, 'rgba(78,115,168,.65)', [10, 8], 2);
     // 지형: 바다 · 산 · 들판
     const gx0 = this.camX - 0.3, gx1 = this.camX + W / g.pxX + 0.3;
     c.fillStyle = '#BFDDEE'; c.fillRect(0, Y(-g.clr), Math.max(0, this.sx(0.2, g)), H);
@@ -1699,6 +1728,10 @@ const J = {
     c.strokeStyle = 'rgba(78,115,168,.7)'; c.lineWidth = 2.2; c.lineCap = 'round';
     this.rain.forEach(d => { const p = this.sx(d.x, g), y = Y(d.h); c.beginPath(); c.moveTo(p, y); c.lineTo(p - 2, y + 12); c.stroke(); });
     drawRuler(c, Y, 2);
+    if (showH) {
+      if (g.narrow) tag(c, `구름 시작 ${kf(H0)} km`, W - 8, Y(H0) - 16, { align: 'right', color: '#3D5A86', px: 13 });
+      else if (Math.abs(this.hAt(this.u) - H0) > 0.32 || M.x - M.r > 420) tag(c, `${kf(H0)} km · 구름이 생기기 시작하는 높이`, 96, Y(H0) - 18, { color: '#3D5A86', px: 14 });
+    }
     if (this.flash > 0) {   // 응결 순간: 뭉게 둘레가 잠깐 빛남
       c.save(); c.strokeStyle = `rgba(78,115,168,${clamp(this.flash / 2.5, 0, 1) * 0.7})`; c.lineWidth = 5;
       c.beginPath(); c.arc(M.x, M.y, M.r + 14 + (S.set.reduce ? 0 : (2.5 - this.flash) * 8), 0, TAU); c.stroke(); c.restore();
@@ -1758,9 +1791,15 @@ async function flow0() {
     { face: 'happy', text: '공기가 더 들어온 건 아닌데 말이야.' },
     { face: 'cold', text: '그런데 기온은 내려갔네. 20℃에서 <b>15℃</b>가 됐어.' },
     { face: 'normal', text: '높이 올라오니 주변 기압이 낮아졌어.' },
-    { face: 'normal', text: '공기가 팽창하면서 주변을 밀어내는 일을 해 기온이 내려가는 거야.',
-      more: '<b>단열 팽창</b>: 공기 덩어리가 올라가면 주위 기압이 낮아 부피가 커지고, 이때 주변을 밀어내는 일을 하느라 기온이 내려가요. 불포화 공기는 1 km에 약 10℃씩 내려가요(<b>건조 단열 감률</b>).<br><small>※ 뭉게의 크기 변화는 이해를 돕기 위한 모식 표현이에요. 실제 공기 덩어리는 이보다 훨씬 조금 부풀어요.</small>' },
-    { face: 'normal', text: '이슬점은 12℃에서 11℃로 조금만 내려갔어. 그래서 두 값의 차이가 8℃에서 <b>4℃</b>로 줄었지.' },
+    { face: 'normal', text: '위에서 나를 누르던 공기가 적어져서, 바깥에서 미는 힘이 약해진 거야. 그래서 몸이 부풀었어 — <span class="kw">팽창</span>!' },
+    { face: 'normal', text: '공기가 팽창하면서 주변을 밀어내는 일을 해 기온이 내려가는 거야.' },
+    { face: 'think', text: '밖에서 누가 열을 빼앗아 간 게 아니야. 주변 공기를 밀어내는 데 내 안의 에너지를 써서 스스로 식은 거지.',
+      more: '페트병에 공기를 넣어 압축했다가 마개를 갑자기 열면, 안의 공기가 팽창하며 식어서 병 안이 뿌옇게 흐려져요. 같은 원리예요.' },
+    { face: 'normal', text: '이렇게 바깥과 열을 주고받지 않고 부피가 변해서 기온이 변하는 것을 <span class="kw">단열 변화</span>라고 해. 올라가며 부풀어 식는 건 <span class="kw">단열 팽창</span>이야.' },
+    { face: 'normal', text: '물방울이 없는 불포화 공기는 1 km 오를 때마다 약 <b>10℃</b>씩 식어. 그래서 0.5 km에서 5℃ 내려갔지. 이걸 <span class="kw">건조 단열 감률</span>이라고 해.',
+      more: '<small>※ 뭉게의 크기 변화는 이해를 돕기 위한 모식 표현이에요. 실제 공기 덩어리는 2 km 올라가도 부피가 약 1.2배로, 이보다 훨씬 조금 부풀어요.</small>' },
+    { face: 'normal', text: '이슬점은 12℃에서 11℃로 1℃만 내려갔어(1 km에 약 2℃). 몸이 부풀면서 내 안의 수증기가 넓게 퍼져 수증기압이 조금 낮아졌거든.' },
+    { face: 'think', text: '기온은 빨리, 이슬점은 천천히 내려가니까 두 값의 차이가 8℃에서 <b>4℃</b>로 줄었어.' },
   ], '올라가니 주변 기압이 낮아져 팽창했고, 기온이 내려갔어. (0.5 km: 기온 15℃ · 이슬점 11℃)');
   await nextStory({ peek: true });
 }
@@ -1804,10 +1843,12 @@ async function flow2() {
   await say([{ face: 'cold', text: '전망은 좋은데… 꽤 춥네.' }]);
   await explain('moist', [
     { face: 'normal', text: '1 km 오르는 동안 기온이 10℃에서 <b>5℃</b>로, 5℃만 내려갔어. 구름이 생기기 전에는 1 km에 10℃씩 내려갔는데.' },
-    { face: 'normal', text: '수증기가 물방울로 변하면서 열을 내놓기 때문이야.',
-      more: '<b>응결열</b>: 수증기가 물방울로 응결할 때 나오는 열이에요. 그래서 포화된 공기는 1 km에 약 5℃만 내려가요(<b>습윤 단열 감률</b>). 이슬점도 기온과 함께 1 km에 약 5℃씩 내려가요.' },
-    { face: 'happy', text: '팽창하며 식는 건 그대로지만, 나오는 열이 그만큼을 조금 채워 준 거지. 그래프에서 1 km 위로 기온 선이 덜 기울어진 게 보여?' },
-  ], '구름 속에서는 응결열 때문에 1 km에 5℃씩 천천히 식었어. (정상 2.0 km: 5℃)');
+    { face: 'normal', text: '수증기가 물방울로 변하면서 열을 내놓기 때문이야.' },
+    { face: 'normal', text: '이 열을 <span class="kw">숨은열(잠열)</span>이라고 해. 바다에서 물이 증발해 수증기가 될 때 품고 있던 열이, 다시 물방울로 응결할 때 밖으로 나오는 거야.' },
+    { face: 'happy', text: '팽창하면서 식는 건 그대로지만, 숨은열이 그 일부를 채워 줘서 천천히 식어. 그래서 포화된 공기는 1 km에 약 <b>5℃</b>씩 식어 — <span class="kw">습윤 단열 감률</span>.',
+      more: '포화된 공기에서는 이슬점도 기온과 함께 1 km에 약 5℃씩 내려가요(기온 = 이슬점). 실제로는 나오는 숨은열의 양이 기온에 따라 달라 습윤 단열 감률이 일정하지 않지만, 교과서에서는 약 5℃/km로 계산해요.' },
+    { face: 'normal', text: '오른쪽 그래프에서 1 km 위로 기온 선이 덜 기울어진 게 보여?' },
+  ], '구름 속에서는 숨은열(잠열) 때문에 1 km에 5℃씩 천천히 식었어. (정상 2.0 km: 5℃)');
   await nextStory({ graph: true, peek: true });
 }
 
@@ -1827,11 +1868,11 @@ async function flow3() {
   setAct(null);
   record('rain');
   await explain('rain', [
-    { face: 'surprised', text: '커진 물방울이 무거워져서 <b>비</b>가 되어 떨어졌어. 영동 쪽 비탈에 비가 내리는 거야.' },
-    { face: 'normal', text: '남은 물방울도 다 떨어졌다고 생각하자. 이제 내 안에는 물방울이 없어.',
-      more: '교과서 그림 Ⅲ-13의 모형은 ‘영동(바람이 불어오는 쪽)에서 비가 내리고, 산을 넘는 공기는 정상에서부터 불포화 상태로 내려간다’고 단순화해요.<br><b>응결 ≠ 강수</b>: 응결은 수증기 → 물방울, 강수는 커진 물방울이 떨어지는 것이에요.' },
-    { face: 'normal', text: '기온과 이슬점은 둘 다 5℃ 그대로야. 하지만 나와 함께 넘어가는 수증기는 출발할 때보다 줄었어.' },
-  ], '커진 물방울은 비가 되어 영동 쪽에 떨어졌어. 함께 넘어가는 수증기가 줄었지.');
+    { face: 'surprised', text: '커진 물방울이 무거워져서 <b>비</b>가 되어 떨어졌어. 영동 쪽 비탈에 비가 내리는 거야.',
+      more: '<b>응결 ≠ 강수</b>: 응결은 수증기가 물방울이 되는 것, 강수는 커진 물방울이 떨어지는 것이에요.' },
+    { face: 'normal', text: '이 여행에서는 내 안의 물방울이 <b>모두</b> 비로 떨어졌다고 생각할게. 이제 내 안에는 물방울이 없어.' },
+    { face: 'normal', text: '기온과 이슬점은 둘 다 5℃ 그대로야. 하지만 물이 비로 빠져나가서, 나와 함께 산을 넘는 수증기는 출발할 때보다 줄었어.' },
+  ], '커진 물방울은 비가 되어 영동 쪽에 떨어졌어. 이제 내 안에는 물방울이 없어.');
   await nextStory({ peek: true });
 }
 
@@ -1839,20 +1880,31 @@ async function flow4() {
   AudioSys.startBgm('warm'); setScene(J); J.place(2, 1);
   await say([{ face: 'happy', text: '이제 산 너머 영서 쪽으로 내려갈 차례야.' }]);
   await predict('p2', P2);
-  J.allow(4, [3, 4], [
-    { u: 2.3, text: '내려오니까 몸이 다시 작아지네.' },
+  J.allow(4, [2.1, 3, 4], [
+    { u: 2.35, text: '내려오니까 몸이 다시 작아지네.' },
     { u: 2.65, text: '조금씩 따뜻해지고 있어.' },
     { u: 3.45, text: '거의 다 왔어!' },
   ]);
   holdAct('⬇ 조금 더 내려가기', '뭉게를 아래로 끌거나, 버튼을 누르고 있어 봐', J, 'ArrowDown');
+  await waitAct('stop');   // 1.9 km: 정상에서 조금만 내려온 곳
+  setAct(null);
+  await explain('unsat', [
+    { face: 'surprised', text: '조금 내려왔을 뿐인데 기온 <b>6℃</b>, 이슬점 <b>5.2℃</b> — 벌써 기온이 이슬점보다 높아졌어! 위쪽 관찰값도 ‘불포화 상태’야.' },
+    { face: 'normal', text: '내 안에 물방울이 없으니까, 내려가며 압축되는 대로 1 km에 10℃씩 따뜻해져. 그런데 이슬점은 1 km에 2℃씩만 올라가.' },
+    { face: 'normal', text: '그래서 정상을 떠나자마자 기온이 이슬점보다 높아져 — 바로 <b>불포화 상태</b>로 내려가는 거야.' },
+    { face: 'think', text: '만약 내 안에 물방울이 남아 있었다면? 내려가는 동안 그 물방울이 먼저 증발하느라 열을 써서, 한동안은 포화 상태로 천천히 따뜻해졌을 거야.',
+      more: '교과서 그림 Ⅲ-13은 이 부분을 단순하게 하려고 ‘영동 쪽에서 물방울이 모두 비로 떨어져서, 산을 넘는 공기는 정상에서부터 불포화 상태로 내려간다’고 가정해요. 그래서 내려올 때는 건조 단열 변화(1 km에 약 10℃)만 생각하면 돼요.' },
+  ], '물방울이 없으니 내려가자마자 기온이 이슬점보다 높아져 불포화 상태가 돼.');
+  holdAct('⬇ 조금 더 내려가기', '계속 내려가 봐', J, 'ArrowDown');
   await waitAct('stop');
   setAct(null);
   record('d1');
   await say([{ face: 'surprised', text: '같은 높이인데, 올라올 때보다 따뜻하잖아? 지금 <b>15℃</b>야.' }, predLine('p2', P2)]);
   await explain('compress', [
-    { face: 'normal', text: '주변 기압이 높아지면서 압축되고, 기온이 올라가고 있어.',
-      more: '<b>단열 압축</b>: 공기 덩어리가 내려가면 주위 기압이 높아 부피가 줄고 기온이 올라가요. 물방울이 없는 불포화 공기라서 1 km에 약 10℃씩 올라가고, 이슬점은 1 km에 약 2℃씩 올라가요.' },
-    { face: 'normal', text: '올라올 때는 구름 속에서 1 km에 5℃만 식었는데, 내려올 때는 1 km에 10℃씩 따뜻해져. 오른쪽 그래프에서 두 기온 선을 비교해 봐.' },
+    { face: 'normal', text: '주변 기압이 높아지면서 압축되고, 기온이 올라가고 있어.' },
+    { face: 'normal', text: '이번에는 바깥 공기가 나를 눌러 몸이 작아졌어. 주변 공기가 나에게 일을 해 준 만큼 에너지가 늘어 따뜻해지는 거야 — <span class="kw">단열 압축</span>.' },
+    { face: 'normal', text: '물방울이 없는 불포화 상태라서 1 km에 약 10℃씩 따뜻해져. 이슬점은 1 km에 약 2℃씩만 올라가.' },
+    { face: 'think', text: '올라올 때 구름 속에서는 1 km에 5℃만 식었는데, 내려올 때는 1 km에 10℃씩 따뜻해져. 오른쪽 그래프에서 두 기온 선을 비교해 봐.' },
   ], '내려오면서 압축되어 1 km에 10℃씩 따뜻해지고 있어.');
   holdAct('⬇ 조금 더 내려가기', '영서 들판까지 내려가 봐', J, 'ArrowDown');
   await waitAct('stop');
@@ -1995,7 +2047,7 @@ const Sky = {
     drawRuler(c, Y, 3);
     const Hc = lclHeight(this.T0, this.Td0);
     hLine(c, Y(Hc), 0, g.colX - 8, 'rgba(78,115,168,.6)', [10, 8], 2);
-    tag(c, `${kf(Hc)} km · 구름이 생기기 시작하는 높이`, 96, Y(Hc) - 18, { px: 13, color: '#3D5A86' });
+    if (this.mode === 'idle' || Math.abs(this.u - Hc) > 0.32 || this.over) tag(c, g.narrow ? `구름 시작 ${kf(Hc)} km` : `${kf(Hc)} km · 구름이 생기기 시작하는 높이`, g.narrow ? 60 : 96, Y(Hc) - 18, { px: 13, color: '#3D5A86' });
     if (this.mode === 'lift') {
       hLine(c, Y(this.uMax), 0, g.colX - 8, 'rgba(199,109,72,.75)', [12, 9], 2.5);
       tag(c, `${kf(this.uMax)} km까지 들어 올리기`, g.px + g.r0 * 1.6 + 10, Y(this.uMax) - 18, { px: 14, color: '#A9532F' });
@@ -2046,7 +2098,7 @@ const Sky = {
     c.fillText(`출발 조건: 지표 ${nf(this.T0)}℃ · 이슬점 ${nf(this.Td0)}℃ · 대기 ${this.name}`, 14, Y(0) + g.r0 * 1.05 + 22); c.restore();
     if (this.banner > 0) {
       c.save(); c.globalAlpha = clamp(this.banner / 0.6, 0, 1);
-      if (g.narrow) tag(c, `새 조건 · ${nf(this.T0)}℃ · 이슬점 ${nf(this.Td0)}℃ · 대기 ${this.name}`, 10, Y(2.6), { px: 14, bg: '#FFF4DA', border: '#E9C98F' });
+      if (g.narrow) tag(c, `새 조건 · ${nf(this.T0)}℃ · 이슬점 ${nf(this.Td0)}℃ · 대기 ${this.name}`, 10, Y(2.3), { px: 14, bg: '#FFF4DA', border: '#E9C98F' });
       else tag(c, `새로운 출발 조건 — 지표 ${nf(this.T0)}℃ · 이슬점 ${nf(this.Td0)}℃ · 대기 ${this.name}`, (g.px + g.colX) / 2, Y(2.6), { px: 16, align: 'center', bg: '#FFF4DA', border: '#E9C98F' });
       c.restore();
     }
@@ -2401,6 +2453,9 @@ function bigGraph(o = {}) {
   for (let h = 0; h <= hMax + 1e-9; h += 0.5)
     g += `<line x1="${L}" y1="${Y(h)}" x2="${R}" y2="${Y(h)}" stroke="#F0E3D4"/><text x="${L - 8}" y="${Y(h) + 5}" text-anchor="end" font-size="15" fill="#78675B">${h.toFixed(1)} km</text>`;
   g += `<line x1="${L}" y1="${T - 6}" x2="${L}" y2="${B}" stroke="#C9B49A" stroke-width="2"/><line x1="${L}" y1="${B}" x2="${R + 6}" y2="${B}" stroke="#C9B49A" stroke-width="2"/>`;
+  (o.bands || []).forEach(bd => {
+    g += `<path d="${P([bd.a, bd.b])}" stroke="${bd.color}" stroke-width="16" opacity=".45" stroke-linecap="round" fill="none"/>`;
+  });
   (o.guides || []).forEach(gd => {
     g += `<line x1="${L}" y1="${Y(gd.h)}" x2="${R}" y2="${Y(gd.h)}" stroke="${gd.color || '#8FB0D2'}" stroke-width="2" stroke-dasharray="6 5"/>
       <text x="${R - 4}" y="${Y(gd.h) - 6}" text-anchor="end" font-size="14" fill="${gd.color || '#3D5A86'}">${gd.label}</text>`;
@@ -2411,6 +2466,9 @@ function bigGraph(o = {}) {
   (o.marks || []).forEach(m => {
     g += `<circle cx="${X(m.a[0])}" cy="${Y(m.a[1])}" r="5" fill="${m.color || COL.ink}"/>`
       + (m.label ? `<text x="${X(m.a[0]) + (m.dx ?? 8)}" y="${Y(m.a[1]) + (m.dy ?? -8)}" font-size="14" fill="${m.color || COL.ink}" text-anchor="${m.anchor || 'start'}">${m.label}</text>` : '');
+  });
+  (o.notes || []).forEach(n => {
+    g += `<text x="${X(n.a[0]) + (n.dx || 0)}" y="${Y(n.a[1]) + (n.dy || 0)}" font-size="${n.px || 15}" font-weight="700" fill="${n.color || COL.ink}" text-anchor="${n.anchor || 'start'}" stroke="#FFFCF7" stroke-width="5" paint-order="stroke">${n.text}</text>`;
   });
   (o.pins || []).forEach(p => {
     g += `<g class="pin${p.sel ? ' sel' : ''}${p.sum ? ' sum' : ''}" data-id="${p.id}" tabindex="0" role="button" aria-label="${p.aria}">
@@ -2478,9 +2536,16 @@ function compareView() {
     const sA = shownScale(volumeRatio(SCENARIO.T0, A.T, 0)), sB = shownScale(volumeRatio(SCENARIO.T0, B.T, 0));
     const col = (name, s, st, cls) => `<div class="cmpCol ${cls}"><h3>${name}</h3>${parcelSVG(s, st.T, name)}
       <table class="obsT"><tr><th>기온</th><td class="T">${nf(st.T)}℃</td></tr><tr><th>이슬점</th><td class="Td">${nf(st.Td)}℃</td></tr><tr><th>상대 습도</th><td>약 ${Math.round(relHumidity(st.T, st.Td))}%</td></tr></table></div>`;
-    const bg = bigGraph({ marks: [{ a: [A.T, 0], label: '출발 20℃', dy: -10, dx: -8, anchor: 'end' }, { a: [B.T, 0], label: '도착 25℃', dy: -10 }], guides: [{ h: H0, label: `구름 시작 ${kf(H0)} km` }] });
+    const bg = bigGraph({
+      marks: [{ a: [A.T, 0], label: '출발 20℃', dy: -10, dx: -8, anchor: 'end' }, { a: [B.T, 0], label: '도착 25℃', dy: -10 }],
+      guides: [{ h: H0, label: `구름 시작 ${kf(H0)} km` }],
+      bands: [{ a: [10, 1], b: [5, 2], color: '#9FC2E8' }, { a: [5, 2], b: [25, 0], color: '#F3C6AE' }],
+      notes: [{ a: [5.6, 2.1], text: '구름 속(1~2 km): 1 km에 5℃만 식음', color: '#3D5A86' },
+              { a: [14, 1.2], text: '내려올 때: 1 km에 10℃씩 따뜻해짐', dx: 10, color: '#A9532F' }],
+    });
     panel(`<span class="tag">도착 · 처음과 나란히 비교</span>
       <div class="cmpWrap">${col('출발 · 영동 0 km', sA, A, 'a')}${col('도착 · 영서 0 km', sB, B, 'b')}<div class="cmpGraph">${bg.svg}</div></div>
+      <div class="fb info">더 따뜻해진 까닭: 구름 속(1~2 km)을 오를 때는 숨은열(잠열) 때문에 1 km에 <b>5℃</b>만 식었는데, 내려올 때는 1 km에 <b>10℃</b>씩 따뜻해졌어요. 그 차이(1 km × 5℃)만큼 도착이 출발보다 <b>5℃</b> 따뜻해요.</div>
       <p class="note">점선 원 = 처음 크기. 크기는 이해를 돕기 위한 모식 표현이에요. 같은 높이에서 더 따뜻한 공기는 아주 조금 더 커요.</p>
       <div class="row2"><button class="btn" id="cmpNext" data-key="1">계속 ➜</button></div>`, 'wide');
     onClick('cmpNext', () => { closePanel(); res(); });
@@ -2491,11 +2556,24 @@ const F13_COLS = ['① 오를 때 (구름 전)<br><small>0 → 1 km</small>', '�
 const F13_ANS = [['불포화', '포화', '불포화'], ['건조 단열 변화', '습윤 단열 변화', '건조 단열 변화'], ['−10℃/km', '−5℃/km', '+10℃/km'], ['−2℃/km', '−5℃/km', '+2℃/km'], ['증가', '일정(100%)', '감소']];
 const F13_SEG = ['up1', 'up2', 'down'];
 const F13_BLANKS = [
-  { r: 0, c: 0, opts: ['불포화', '포화'], why: '0 km에서 기온 20℃, 이슬점 12℃였어. 두 값이 같았니?' },
-  { r: 3, c: 1, opts: ['−2℃/km', '−5℃/km', '+2℃/km'], why: '1 km에서 이슬점 10℃, 2 km에서 5℃였어. 1 km 동안 몇 ℃ 변했지?' },
-  { r: 2, c: 2, opts: ['+5℃/km', '+10℃/km', '−10℃/km'], why: '정상 2 km에서 5℃, 1 km에서 15℃, 지표에서 25℃였어. 1 km마다 몇 ℃ 올랐지?' },
-  { r: 4, c: 2, opts: ['증가', '일정(100%)', '감소'], why: '기온은 5℃ → 25℃, 이슬점은 5℃ → 9℃. 두 값의 차이가 어떻게 달라졌지?' },
+  { r: 0, c: 0, opts: ['불포화', '포화'], ev: [['출발 0 km', 0, 'up'], ['0.5 km', 0.5, 'up']], hi: ['T', 'Td'],
+    hint: '기온과 이슬점이 같으면 포화, 기온이 이슬점보다 높으면 불포화예요.', why: '0~1 km 사이에서는 기온이 이슬점보다 높았어.' },
+  { r: 3, c: 1, opts: ['−2℃/km', '−5℃/km', '+2℃/km'], ev: [['응결 시작 1.0 km', 1, 'up'], ['정상 2.0 km', 2, 'up']], hi: ['Td'],
+    hint: '1 km 올라가는 동안 이슬점이 몇 ℃ 변했는지 계산해 봐요.', why: '이슬점이 10℃ → 5℃, 1 km에 5℃ 내려갔어.' },
+  { r: 2, c: 2, opts: ['+5℃/km', '+10℃/km', '−10℃/km'], ev: [['정상 2.0 km', 2, 'down'], ['내려가다 1.0 km', 1, 'down'], ['도착 0 km', 0, 'down']], hi: ['T'],
+    hint: '1 km 내려올 때마다 기온이 몇 ℃씩 변했나요? (올라가면 +)', why: '기온이 5℃ → 15℃ → 25℃, 1 km에 10℃씩 올라갔어.' },
+  { r: 4, c: 2, opts: ['증가', '일정(100%)', '감소'], ev: [['정상 2.0 km', 2, 'down'], ['내려가다 1.0 km', 1, 'down'], ['도착 0 km', 0, 'down']], hi: ['rh', 'gap'],
+    hint: '상대 습도 칸을 봐요. 기온과 이슬점의 차이가 커질수록 상대 습도는 어떻게 되나요?', why: '두 값의 차이가 0 → 8 → 16℃로 커지면서 상대 습도가 100% → 59% → 36%로 낮아졌어.' },
 ];
+// 빈칸 옆에 보여 줄 근거: 그 구간의 관찰값 (값은 PHYSICS 계산 = 관찰 기록과 같은 값)
+function f13Evidence(b) {
+  const row = ([label, h, side]) => {
+    const st = side === 'up' ? riseState(SCENARIO.T0, SCENARIO.Td0, h) : descendFrom(SUMMIT.T, SUMMIT.Td, SCENARIO.TOP, h);
+    const hi = k => (b.hi.includes(k) ? ' hi' : '');
+    return `<tr><td>${label}</td><td class="T${hi('T')}">${nf(st.T)}℃</td><td class="Td${hi('Td')}">${nf(st.Td)}℃</td><td class="${hi('gap').trim()}">${nf(st.T - st.Td)}℃</td><td class="${hi('rh').trim()}">${Math.round(relHumidity(st.T, st.Td))}%</td></tr>`;
+  };
+  return `<table class="obsT evT"><tr><th>내 관찰 기록</th><th>기온</th><th>이슬점</th><th>두 값의 차이</th><th>상대 습도</th></tr>${b.ev.map(row).join('')}</table>`;
+}
 function fig13Table(show, blankHtml) {
   return `<table class="cmpTbl f13"><tr><th></th>${F13_COLS.map(c => `<th>${c}</th>`).join('')}</tr>${F13_ROWS.map((rn, r) => `<tr><th>${rn}</th>${F13_COLS.map((_, c) => {
     const bi = F13_BLANKS.findIndex(b => b.r === r && b.c === c);
@@ -2514,8 +2592,11 @@ function fig13Check() {
       const blankHtml = bi => `<button class="blank${bi === act ? ' on' : ''}" data-bi="${bi}">${bi + 1}번 ?</button>`;
       panel(`<span class="tag">관측소 보고 · 교과서 그림 Ⅲ-13</span>
         ${fig13Table(show, blankHtml)}
-        ${all ? '<div class="fb ok">표 완성! 구간마다 남긴 관찰 기록이 그림 Ⅲ-13의 근거예요.</div>' : `<p class="q"><b>${act + 1}번</b> · ${F13_COLS[b.c].replace(/<br>.*$/, '')}의 ${F13_ROWS[b.r]}은?</p>
-        <div class="opts">${b.opts.map((o, i) => `<button class="btn sub" data-key="${i + 1}" data-o="${o}">${o}</button>`).join('')}</div>`}
+        ${all ? '<div class="fb ok">표 완성! 구간마다 남긴 관찰 기록이 그림 Ⅲ-13의 근거예요.</div>' : `<div class="f13q"><div>
+          <p class="q"><b>${act + 1}번</b> · ${F13_COLS[b.c].replace(/<br>.*$/, '')}의 ${F13_ROWS[b.r]}은?</p>
+          <p class="hint">${b.hint}</p>
+          <div class="opts">${b.opts.map((o, i) => `<button class="btn sub" data-key="${i + 1}" data-o="${o}">${o}</button>`).join('')}</div></div>
+          <div>${f13Evidence(b)}</div></div>`}
         ${msg}
         <p class="note">회색 칸 = 앞선 여정 요약(직접 관찰하지 않은 구간) · 빈칸을 다 채우지 않아도 계속할 수 있어요</p>
         <div class="row2"><button class="btn${all ? '' : ' sub'}" id="f13Done" data-key="9">계속 ➜</button></div>`, 'wide');
@@ -2525,8 +2606,8 @@ function fig13Check() {
         const ok = el.dataset.o === F13_ANS[b.r][b.c];
         if (!S.rec.f13[act]) S.rec.f13[act] = { first: el.dataset.o, ok };
         Store.save();
-        if (ok) { AudioSys.sSparkle(); msg = `<div class="fb ok">맞아! ${F13_ANS[b.r][b.c]}</div>`; }
-        else msg = `<div class="fb info">${b.why} → <b>${F13_ANS[b.r][b.c]}</b></div>`;
+        if (ok) { AudioSys.sSparkle(); msg = `<div class="fb ok">${act + 1}번 맞아! ${b.why} → ${F13_ANS[b.r][b.c]}</div>`; }
+        else msg = `<div class="fb info">${act + 1}번: ${b.why} 그래서 <b>${F13_ANS[b.r][b.c]}</b></div>`;
         show[act] = true;
         const nx = show.findIndex(f => !f); if (nx >= 0) act = nx;
         render();
@@ -2540,7 +2621,7 @@ function part1End() {
   return guard(new Promise(res => {
     panel(`<span class="tag">1부 정리 — 여기서 수업을 멈춰도 좋아요</span>
       <h2>산을 넘은 뭉게: 더 따뜻하고 건조하게</h2>
-      <div class="fb info">① 오를 때: 구름이 생기기 전에는 1 km에 10℃, 구름 속에서는 응결열 때문에 1 km에 5℃씩 기온이 내려갔어요.<br>
+      <div class="fb info">① 오를 때: 구름이 생기기 전에는 1 km에 10℃, 구름 속에서는 숨은열(잠열) 때문에 1 km에 5℃씩 기온이 내려갔어요.<br>
       ② 영동 쪽에 비가 내려 함께 넘어가는 수증기가 줄었어요.<br>③ 내려올 때: 불포화 상태로 1 km에 10℃씩 기온이 올라갔어요.</div>
       <div class="row2"><button class="btn" id="cpP2" data-key="1">2부로 ▶</button><button class="btn sub" id="cpLab" data-key="2">다른 조건의 여행 (선택)</button><button class="btn sub" id="cpRes" data-key="3">📒 학습 기록</button></div>`, 'wide');
     onClick('cpLab', () => { closePanel(); res('lab'); });
@@ -2788,7 +2869,8 @@ function showChapterSelect() {
 const CONCEPTS = [
   ['단열 팽창', '공기 덩어리가 올라가면 주위 기압이 낮아 부피가 커지고, 주변을 밀어내는 일을 하느라 기온이 내려간다. 불포화 공기: 1 km에 약 10℃ (건조 단열 감률), 이슬점 약 2℃.'],
   ['상승 응결 고도', '올라가는 공기의 기온이 이슬점과 같아져 응결이 시작되는 높이. H(km) = (T₀ − Td₀)/8 → (20 − 12)/8 = 1 km.'],
-  ['응결열 · 습윤 단열 감률', '수증기가 물방울로 응결할 때 열이 나와 포화 공기는 1 km에 약 5℃만 내려간다. 이슬점도 함께 약 5℃.'],
+  ['숨은열(잠열) · 습윤 단열 감률', '수증기가 물방울로 응결할 때 숨은열(잠열)이 나와 포화 공기는 1 km에 약 5℃만 내려간다. 이슬점도 함께 약 5℃.'],
+  ['정상에서 바로 불포화로 내려가는 까닭', '물방울이 모두 비로 떨어졌다고 가정(그림 Ⅲ-13). 물방울이 없으면 내려가자마자 기온 +10℃/km, 이슬점 +2℃/km로 벌어져 곧바로 불포화. 물방울이 남아 있으면 증발하는 동안 포화 상태로 천천히 따뜻해진다.'],
   ['응결과 강수', '응결: 수증기 → 물방울(공기 덩어리 안에 생김). 강수: 커진 물방울이 떨어짐. 교과서 모형은 영동 쪽 강수 뒤 정상에서부터 불포화 하강으로 단순화.'],
   ['단열 압축 · 푄(높새바람)', '내려가는 공기는 압축되어 1 km에 약 10℃ 따뜻해진다(이슬점 +2℃). 20℃ · 12℃로 출발한 공기가 2 km 산을 넘으면 25℃ · 9℃로 고온 건조해진다.'],
   ['대기 안정도', '같은 높이에서 공기 덩어리가 주위보다 따뜻하면 상승, 차가우면 되돌아옴. 주위 기온 감률 < 5: 절대 안정, 5~10: 조건부 불안정, > 10: 절대 불안정.'],
