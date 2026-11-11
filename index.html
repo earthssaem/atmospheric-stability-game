@@ -56,14 +56,14 @@
     box-shadow:var(--shadow); font-size:21px; cursor:pointer; }
   #tools button:focus-visible { outline:3px solid var(--pri); }
   /* 관찰값: 고정된 영역 (위치를 자주 바꾸지 않음) */
-  #meters { position:absolute; top:68px; right:12px; padding:6px 12px; display:flex; flex-wrap:wrap; gap:4px 14px; justify-content:flex-end; max-width:min(420px,60vw); }
+  #meters { position:absolute; top:68px; right:12px; padding:6px 16px; display:grid; grid-template-columns:repeat(4, auto); column-gap:18px; row-gap:2px; width:max-content; max-width:calc(100% - 24px); }
   .meter { text-align:center; min-width:62px; }
   .meter .lab { font-size:13px; color:var(--sub); }
   .meter .val { font-size:22px; font-weight:700; line-height:1.1; color:var(--ink); font-variant-numeric:tabular-nums; }
   .meter .val small { font-size:13px; font-weight:500; }
   #mT .val { color:var(--Tt); } #mTd .val { color:var(--Td); } #mRH .val { color:#3F6E58; }
   #mRH.off { display:none; }
-  #airState { width:100%; text-align:right; font-size:13px; color:var(--sub); }
+  #airState { grid-column:1 / -1; text-align:center; font-size:13px; color:var(--sub); }
   #airState.sat { color:var(--Td); font-weight:600; }
 
   /* 토스트: 작게, 장면을 가리지 않게 */
@@ -344,7 +344,7 @@
     a#progress { max-width:calc(100% - 232px); padding:5px 10px; }
     #chapterName { font-size:14px; }
     #tools button { width:44px; height:44px; font-size:19px; }
-    #meters { top:64px; left:12px; right:12px; max-width:none; justify-content:space-between; }
+    #meters { top:64px; left:12px; right:12px; width:auto; max-width:none; grid-template-columns:repeat(4, 1fr); column-gap:6px; }
     .meter { min-width:0; } .meter .val { font-size:19px; }
     #miniGraph { width:min(220px, 56vw); }
     .chList, .startBtns { grid-template-columns:1fr; }
@@ -1600,7 +1600,7 @@ function predLine(key, P) {
 const CU_TOP = cuOf(condensedFrac(SCENARIO.T0, SCENARIO.Td0, SCENARIO.TOP));
 const J = {
   u: 0, target: 0, uMin: 0, uMax: 0, stops: [], cues: [], drive: 0, dragging: false, active: false,
-  rainOut: 0, raining: false, rain: [], rainAcc: 0, camX: null, flash: 0,
+  rainOut: 0, raining: false, rain: [], rainAcc: 0, camX: null,
   xAt(u) { return u <= 2 ? 3.6 * Math.pow(u / 2, 0.8) : 3.6 + 3.2 * Math.pow((u - 2) / 2, 0.8); },
   hAt(u) { return u <= 2 ? u : 4 - u; },
   pathH(x) {
@@ -1619,10 +1619,10 @@ const J = {
     const k = clamp((b.bot - b.top) / 2.6 / 230, 0.62, 1.2), r0 = TUNING.mungge.baseR * k;
     const y0 = b.bot - r0 * 1.2, pxY = (y0 - b.top - r0 * 1.5) / 2;
     const pxX = Math.max(W / 5.2, pxY * 1.05);
-    return { ...b, r0, y0, pxY, pxX, clr: (r0 * 1.08) / pxY, fx: b.narrow ? (Peek.on ? 0.3 : 0.5) : 0.36 };
+    return { ...b, r0, y0, pxY, pxX, clr: (r0 * 1.8) / pxY, fx: b.narrow ? (Peek.on ? 0.3 : 0.5) : 0.36 };
   },
   ground(x, g) { return Math.max(-g.clr, this.pathH(x) - g.clr); },
-  enter() { this.camX = null; this.rain = []; this.drive = 0; this.dragging = false; this.flash = 0; },
+  enter() { this.camX = null; this.rain = []; this.drive = 0; this.dragging = false; },
   place(u, rainOut = 0) {
     Object.assign(this, { u, target: u, uMin: u, uMax: u, rainOut, raining: false, stops: [], cues: [], active: false, drive: 0, dragging: false });
     this.camX = null;
@@ -1671,21 +1671,22 @@ const J = {
     const camMax = Math.max(-1.6, 9.4 - W / g.pxX), want = clamp(x - g.fx * W / g.pxX, -1.6, camMax);
     if (this.camX == null || S.set.reduce) this.camX = want; else this.camX += (want - this.camX) * Math.min(1, dt * 4);
     M.r0 = g.r0; M.x = this.sx(x, g); M.y = g.y0 - h * g.pxY;
-    // 빗줄기 (월드 좌표): 강수 중에는 뭉게와 영동 쪽 비탈 구름에서, 그 뒤에는 비탈 구름에서 약하게
-    const rate = this.raining ? 34 : this.rainOut >= 1 ? 7 : 0;
+    // 빗줄기 (월드 좌표): 구름 속을 오르며 물방울이 커지면(약 1.5 km부터) 조금씩, 정상에서 남은 물방울이 모두,
+    // 그 뒤에도 영동 쪽 비탈 구름에서 약하게 — 비는 바람이 불어오는 쪽(영동)에서만
+    const climbRain = !down && h >= 1.5 ? 10 + 14 * clamp((h - 1.5) / 0.5, 0, 1) : 0;
+    const rate = this.raining ? 34 : this.rainOut >= 1 ? 7 : climbRain;
     if (rate && dt > 0) {
       this.rainAcc += dt * rate;
       while (this.rainAcc >= 1) {
         this.rainAcc -= 1;
-        if (this.raining && Math.random() < 0.4 && !down) this.rain.push({ x: x + (Math.random() - 0.5) * 0.3, h: h - (M.r * 0.5) / g.pxY, v: 1 + Math.random() * 0.4 });
-        else { const uu = H0 + 0.1 + Math.random() * (1.85 - H0); this.rain.push({ x: this.xAt(uu) + (Math.random() - 0.5) * 0.2, h: this.hAt(uu) - 0.06, v: 0.8 + Math.random() * 0.4 }); }
+        if ((this.raining || climbRain) && Math.random() < (this.raining ? 0.4 : 0.6) && !down) this.rain.push({ x: x + (Math.random() - 0.5) * 0.3, h: h - (M.r * 0.5) / g.pxY, v: 0.6 + Math.random() * 0.3 });
+        else { const uu = H0 + 0.1 + Math.random() * (Math.min(1.85, down ? 1.85 : this.u - 0.1) - H0 - 0.1); this.rain.push({ x: this.xAt(uu) + (Math.random() - 0.5) * 0.2, h: this.hAt(uu) - 0.06, v: 0.8 + Math.random() * 0.4 }); }
       }
     }
     for (let i = this.rain.length - 1; i >= 0; i--) {
       const d = this.rain[i]; d.h -= d.v * dt; d.x -= 0.1 * dt;
       if (d.h <= this.ground(d.x, g) + g.clr * 0.2) this.rain.splice(i, 1);
     }
-    if (this.flash > 0) this.flash -= dt;
   },
   pd(x, y) {
     if (!this.active) return;
@@ -1732,14 +1733,15 @@ const J = {
     c.save(); c.setLineDash([3, 10]); c.lineCap = 'round'; c.strokeStyle = 'rgba(199,109,72,.45)'; c.lineWidth = 3; c.beginPath();
     for (let u = 0; u <= 4.0001; u += 0.05) { const p = this.sx(this.xAt(u), g), y = Y(this.hAt(u)); u ? c.lineTo(p, y) : c.moveTo(p, y); }
     c.stroke(); c.restore();
-    // 정상 깃발 + 산 높이
+    // 산꼭대기: 작은 깃발은 뭉게가 지나가는 높이보다 아래(땅 위)에만, 이름은 산 안쪽에 — 뭉게와 겹치지 않게
     const fx = this.sx(3.6, g);
-    if (fx > -80 && fx < W + 80) {
-      const px = fx + Math.max(80, g.r0 * 2.2), gy = Y(this.ground(3.6 + (px - fx) / g.pxX, g) - 0.02);
-      hLine(c, Y(2), fx - 90, px + 150, 'rgba(140,106,85,.45)', [6, 6], 1.5);
-      c.strokeStyle = '#8C6A55'; c.lineWidth = 4; c.beginPath(); c.moveTo(px, gy); c.lineTo(px, Y(2) - 4); c.stroke();
-      c.fillStyle = '#E88A6E'; c.beginPath(); c.moveTo(px, Y(2) - 4); c.lineTo(px + 34, Y(2) + 6); c.lineTo(px, Y(2) + 16); c.closePath(); c.fill();
-      tag(c, '산 높이 2.0 km', px + 10, Y(2) + 34, { px: 14 });
+    if (fx > -120 && fx < W + 120) {
+      const gy = Y((this.ground(3.48, g) + this.ground(3.6, g) * 2 + this.ground(3.72, g)) / 4);
+      hLine(c, Y(2), fx - 120, fx + 120, 'rgba(140,106,85,.35)', [6, 6], 1.5);
+      const ph = Math.min(18, g.r0 * 0.4);
+      c.strokeStyle = '#8C6A55'; c.lineWidth = 3; c.beginPath(); c.moveTo(fx, gy + 2); c.lineTo(fx, gy - ph); c.stroke();
+      c.fillStyle = '#E88A6E'; c.beginPath(); c.moveTo(fx, gy - ph); c.lineTo(fx + 15, gy - ph + 5); c.lineTo(fx, gy - ph + 10); c.closePath(); c.fill();
+      tag(c, '태백산맥 정상', fx, gy + 64, { px: 14, align: 'center', bg: 'rgba(255,252,247,.85)' });   // 산 안쪽(땅 아래)에 — 뭉게가 지나가는 하늘과 겹치지 않게
     }
     // 장소 이름
     const lab = (xk, text, col) => { const p = this.sx(xk, g); if (p > -120 && p < W + 120) tag(c, text, p, Y(-g.clr) + 22, { align: 'center', px: 14, color: col }); };
@@ -1752,24 +1754,21 @@ const J = {
       c.beginPath(); c.moveTo(stx, gy - 34); c.lineTo(stx, gy - 54); c.stroke();
       c.fillStyle = '#F3B589'; c.beginPath(); c.arc(stx, gy - 56, 4, 0, TAU); c.fill();
     }
-    // 영동 쪽 비탈의 구름 (3장 강수부터 — 뭉게 뒤로 계속 밀려 올라온 공기에도 물방울이 생김)
-    if (this.raining || this.rainOut > 0) {
-      for (let uu = H0 + 0.05; uu <= 1.95; uu += 0.13) {
+    // 영동 쪽 비탈의 구름: 뭉게 뒤로 계속 밀려 올라온 공기에도 물방울이 생겨 비탈을 따라 구름이 됨 (1.5 km를 지난 뒤부터)
+    const capTo = this.raining || this.rainOut > 0 || this.u > 2 ? 1.95 : this.u >= 1.5 ? this.u - 0.25 : 0;
+    if (capTo > H0) {
+      for (let uu = H0 + 0.05; uu <= capTo; uu += 0.13) {
         const p = this.sx(this.xAt(uu), g); if (p < -60 || p > W + 60) continue;
         drawCloudBlob(c, p, Y(this.hAt(uu) - 0.04), g.r0 * 0.42, Math.round(uu * 37), t, 0.5);
       }
     }
     // 빗줄기
     c.strokeStyle = 'rgba(78,115,168,.7)'; c.lineWidth = 2.2; c.lineCap = 'round';
-    this.rain.forEach(d => { const p = this.sx(d.x, g), y = Y(d.h); c.beginPath(); c.moveTo(p, y); c.lineTo(p - 2, y + 12); c.stroke(); });
+    this.rain.forEach(d => { const p = this.sx(d.x, g), y = Y(d.h); c.beginPath(); c.moveTo(p, y); c.lineTo(p - 3, y + 16); c.stroke(); });
     drawRuler(c, Y, 2);
     if (showH) {
       if (g.narrow) tag(c, `구름 시작 ${kf(H0)} km`, W - 8, Y(H0) - 16, { align: 'right', color: '#3D5A86', px: 13 });
       else if (Math.abs(this.hAt(this.u) - H0) > 0.32 || M.x - M.r > 420) tag(c, `${kf(H0)} km · 구름이 생기기 시작하는 높이`, 96, Y(H0) - 18, { color: '#3D5A86', px: 14 });
-    }
-    if (this.flash > 0) {   // 응결 순간: 뭉게 둘레가 잠깐 빛남
-      c.save(); c.strokeStyle = `rgba(78,115,168,${clamp(this.flash / 2.5, 0, 1) * 0.7})`; c.lineWidth = 5;
-      c.beginPath(); c.arc(M.x, M.y, M.r + 14 + (S.set.reduce ? 0 : (2.5 - this.flash) * 8), 0, TAU); c.stroke(); c.restore();
     }
     M.draw(c, t);
     Bubble.draw(c);
@@ -1847,7 +1846,7 @@ async function flow1() {
   J.allow(H0, [H0], [{ u: 0.68, text: '두 값이 점점 가까워지고 있어!' }, { u: 0.88, text: '거의 같아졌어…' }]);
   holdAct('⬆ 조금 더 올라가기', '위쪽 관찰값의 기온과 이슬점을 보면서 올라가 봐', J);
   await waitAct('stop');
-  setAct(null); AudioSys.sCondense(); J.flash = 2.5;
+  setAct(null); AudioSys.sCondense();
   spawnParticles(M.x, M.y, 14, ['#FFFFFF', '#CFE0F2'], 120, 0.9, 20);
   Trail.condensed = true; S.rec.segs.up1 = Trail.sumUp >= H0 ? 'summary' : 'observed';
   record('lcl');
@@ -1868,7 +1867,7 @@ async function flow2() {
   J.allow(2, [2], [
     { u: 1.22, text: '몸은 계속 커지고 있어.' },
     { u: 1.45, text: '계속 올라가는데, 아까보다는 기온이 천천히 내려가네.' },
-    { u: 1.75, text: '물방울도 점점 많아져.' },
+    { u: 1.6, text: '물방울이 커져서 조금씩 비로 떨어지기 시작했어!' },
   ]);
   holdAct('⬆ 조금 더 올라가기', '산비탈을 따라 정상까지 올라가 봐', J);
   await waitAct('stop');
@@ -1884,6 +1883,7 @@ async function flow2() {
     { face: 'happy', text: '팽창하면서 식는 건 그대로지만, 숨은열이 그 일부를 채워 줘서 천천히 식어. 그래서 포화된 공기는 1 km에 약 <b>5℃</b>씩 식어 — <span class="kw">습윤 단열 감률</span>.',
       more: '포화된 공기에서는 이슬점도 기온과 함께 1 km에 약 5℃씩 내려가요(기온 = 이슬점). 실제로는 나오는 숨은열의 양이 기온에 따라 달라 습윤 단열 감률이 일정하지 않지만, 교과서에서는 약 5℃/km로 계산해요.' },
     { face: 'normal', text: '오른쪽 그래프에서 1 km 위로 기온 선이 덜 기울어진 게 보여?' },
+    { face: 'think', text: '그리고 올라오는 동안 영동 쪽 비탈에 비가 내리기 시작했지? 다음 장면에서 구름 속을 자세히 들여다보자.' },
   ], '구름 속에서는 숨은열(잠열) 때문에 1 km에 5℃씩 천천히 식었어. (정상 2.0 km: 5℃)');
   await nextStory({ graph: true, peek: true });
 }
@@ -1894,8 +1894,9 @@ async function flow3() {
   await say([
     { face: 'normal', text: '내 안을 들여다볼까? 왼쪽 위 창을 봐.' },
     { face: 'normal', text: '회색 점은 <b>공기 알갱이</b>, 작은 동그라미는 <b>수증기</b>, 파란 방울은 수증기가 모여 생긴 <b>물방울</b>이야.' },
+    { face: 'normal', text: '구름 속을 오르는 동안 물방울끼리 부딪히며 점점 커졌어. 무거워진 물방울은 벌써 조금씩 비가 되어 떨어졌지.' },
   ]);
-  setAct('<div class="msg">구름 속 물방울이 어떻게 되는지 지켜볼까?</div><button class="btn" id="rainBtn">🌧 물방울 지켜보기</button>');
+  setAct('<div class="msg">내 안에 남은 물방울은 어떻게 될까?</div><button class="btn" id="rainBtn">🌧 남은 물방울 지켜보기</button>');
   await waitClick('rainBtn');
   setAct('<div class="msg">물방울끼리 부딪히며 커지고 있어…</div>');
   Bubble.show('물방울이 점점 커져!', 2.4);
@@ -1904,7 +1905,7 @@ async function flow3() {
   setAct(null);
   record('rain');
   await explain('rain', [
-    { face: 'surprised', text: '커진 물방울이 무거워져서 <b>비</b>가 되어 떨어졌어. 영동 쪽 비탈에 비가 내리는 거야.',
+    { face: 'surprised', text: '커진 물방울은 무거워져서 <b>비</b>가 되어 떨어져. 그래서 바람이 불어오는 영동 쪽 비탈에 비가 내리는 거야.',
       more: '<b>응결 ≠ 강수</b>: 응결은 수증기가 물방울이 되는 것, 강수는 커진 물방울이 떨어지는 것이에요.' },
     { face: 'normal', text: '이 여행에서는 내 안의 물방울이 <b>모두</b> 비로 떨어졌다고 생각할게. 이제 내 안에는 물방울이 없어.' },
     { face: 'normal', text: '기온과 이슬점은 둘 다 5℃ 그대로야. 하지만 물이 비로 빠져나가서, 나와 함께 산을 넘는 수증기는 출발할 때보다 줄었어.' },
