@@ -7,7 +7,7 @@ const m = html.match(/\/\/ ==PHYSICS-START==([\s\S]*?)\/\/ ==PHYSICS-END==/);
 if (!m) { console.error('PHYSICS 블록을 찾을 수 없습니다'); process.exit(1); }
 
 const api = new Function(
-  m[1] + '\nreturn { RATE, SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints };'
+  m[1] + '\nreturn { RATE, SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints, pressureAt, volumeRatio, condensedFrac };'
 )();
 
 let fails = 0;
@@ -17,7 +17,7 @@ function eq(name, got, want, tol = 1e-9) {
   if (!ok) fails++;
 }
 
-const { SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints } = api;
+const { SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints, pressureAt, volumeRatio, condensedFrac } = api;
 function eqPts(name, got, want) {
   const ok = got.length === want.length &&
     got.every((p, i) => Math.abs(p[0] - want[i][0]) < 1e-9 && Math.abs(p[1] - want[i][1]) < 1e-9);
@@ -118,6 +118,23 @@ for (const [Td, M] of [[10, 2.0], [14, 3.0], [18, 1.2], [8, 2.6]]) {
   const f = foehnTrip(20, Td, M);
   eq(`푄 일반식 Td=${Td}, 산 ${M} km: ΔT = 5×(M−H)`, f.dT, Math.max(0, 5 * (M - f.H)), 1e-9);
 }
+
+// --- 뭉게 크기(모식 표현)의 근거: 부피 비 V/V0 = (T/T0)(p0/p) ---
+eq('기압: 지표 1013 hPa', pressureAt(0), 1013);
+eq('기압: 높을수록 낮아짐 (1 km < 0 km)', pressureAt(1) < pressureAt(0), true);
+eq('부피 비: 출발 상태 = 1', volumeRatio(20, 20, 0), 1);
+eq('부피 비: 0.5 km(15℃) ≈ 1.043 (팽창)', volumeRatio(20, 15, 0.5), 1.043, 0.002);
+eq('부피 비: 정상 2 km(5℃) ≈ 1.20 (팽창 계속)', volumeRatio(20, 5, 2), 1.204, 0.003);
+eq('부피 비: 응결 뒤에도 계속 커짐 (1 km < 2 km)', volumeRatio(20, 10, 1) < volumeRatio(20, 5, 2), true);
+eq('부피 비: 하강 1 km(15℃) < 정상 (압축)', volumeRatio(20, 15, 1) < volumeRatio(20, 5, 2), true);
+eq('부피 비: 도착 0 km(25℃) ≈ 1.017 (같은 높이, 더 따뜻해서 아주 조금 큼)', volumeRatio(20, 25, 0), 1.017, 0.001);
+
+// --- 응결한 수증기 비율: 포화 전 0, 포화 뒤 증가 ---
+eq('응결 비율: 0.5 km(불포화) = 0', condensedFrac(20, 12, 0.5), 0);
+eq('응결 비율: 응결 고도 1.0 km = 0 (막 시작)', condensedFrac(20, 12, 1.0), 0);
+eq('응결 비율: 1.5 km > 0', condensedFrac(20, 12, 1.5) > 0, true);
+eq('응결 비율: 정상 2 km ≈ 0.20', condensedFrac(20, 12, 2.0), 0.20, 0.01);
+eq('응결 비율: 높을수록 증가 (1.5 < 2.0)', condensedFrac(20, 12, 1.5) < condensedFrac(20, 12, 2.0), true);
 
 console.log(fails === 0 ? '\n모든 테스트 통과! 🎉' : `\n${fails}개 실패`);
 process.exit(fails === 0 ? 0 : 1);
