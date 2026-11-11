@@ -292,6 +292,151 @@ await step('처음 화면 + 이어하기 활성', async () => {
   await page.waitForSelector('#contBtn', { timeout: 5000 });
 });
 
+// ===================== v1.3 개선 사항 검증 =====================
+const waitPlaying4 = () => page.waitForFunction(() =>
+  S.chapter === 4 && Ch4Scene.playing && AudioSys.now() > Ch4Scene.firstNote + 0.3, null, { timeout: 10000 });
+
+await step('처음 화면: 제작자 푸터 + 허브 링크(새 탭)', async () => {
+  const f = await page.evaluate(() => {
+    const a = document.querySelector('#overlay footer a.hub');
+    return a && { href: a.href, target: a.target, rel: a.rel, txt: a.closest('footer').textContent };
+  });
+  if (!f) throw new Error('푸터/허브 링크 없음');
+  if (f.href !== 'https://earthssaem-lab.vercel.app/' || f.target !== '_blank' || !f.rel.includes('noopener'))
+    throw new Error(JSON.stringify(f));
+  if (!f.txt.includes(' | ')) throw new Error('구분자 " | " 없음');
+});
+
+await step('4장: 박자 없이 마구 두드리면(0.125초 간격) 통과 못 함', async () => {
+  await page.evaluate(() => { S.hearts = 99; startChapter(4, true); });
+  await waitPlaying4();
+  await page.evaluate(() => { window.__mash = setInterval(() => Ch4Scene.pd(0, 0), 125); });
+  await page.waitForFunction(() => !Ch4Scene.playing || S.chapter !== 4, null, { timeout: 40000 });
+  await page.evaluate(() => clearInterval(window.__mash));
+  const r = await page.evaluate(() => ({ hits: Ch4Scene.hits, misses: Ch4Scene.misses, need: TUNING.ch4.needHits }));
+  console.log(`   (연타: hits=${r.hits}, misses=${r.misses})`);
+  if (r.hits >= r.need) throw new Error('연타로 통과됨 ' + JSON.stringify(r));
+});
+
+await step('4장: 하트 0 → 재도전 시 이전 판 "쿵" 예약이 남지 않음', async () => {
+  await page.evaluate(() => { S.hearts = 1; startChapter(4, true); });
+  await waitPlaying4();
+  await page.waitForSelector('#retryBtn', { timeout: 15000 }); // miss 2회 → 하트 0
+  const left = await page.evaluate(() => AudioSys.pendingCount());
+  if (left !== 0) throw new Error(`재도전 화면 뒤에 예약 소리 ${left}개`);
+  await press('retryBtn');
+  await page.waitForTimeout(200);
+  const r = await page.evaluate(() => {
+    const now = AudioSys.now();
+    return { times: new Set(AudioSys.sched.filter(s => s.t > now).map(s => s.t.toFixed(4))).size,
+             want: TUNING.ch4.countInBeats + TUNING.ch4.totalNotes };
+  });
+  if (r.times > r.want) throw new Error(`예약 시각 ${r.times}개 > 새 판 ${r.want}개 (이전 판 소리 남음)`);
+});
+
+await step('4장: 홈 확인 창 동안 리듬이 멈췄다가 "계속하기"로 이어짐', async () => {
+  await page.evaluate(() => { S.hearts = 5; startChapter(4, true); });
+  await waitPlaying4();
+  const before = await page.evaluate(() => ({ m: Ch4Scene.misses, t: AudioSys.now() }));
+  await page.click('#progress');
+  await page.waitForSelector('#homeNoBtn', { timeout: 3000 });
+  await page.waitForTimeout(2500);
+  const mid = await page.evaluate(() => AudioSys.now());
+  await press('homeNoBtn');
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => ({ m: Ch4Scene.misses, paused: S.paused }));
+  if (mid - before.t > 0.5) throw new Error(`확인 창 동안 리듬 시계가 ${(mid - before.t).toFixed(2)}초 흘렀음`);
+  if (after.m - before.m > 1) throw new Error(`확인 창 뒤 miss 급증 ${before.m}→${after.m}`);
+  if (after.paused) throw new Error('계속하기 후에도 멈춤');
+});
+
+await step('홈: 3장 플레이 중 → 확인 → 처음 화면 (하트·발자국 유지, 이어하기 = 3장)', async () => {
+  await page.evaluate(() => { S.hearts = 4; startChapter(3, true); });
+  await page.waitForTimeout(300);
+  const trailBefore = await page.evaluate(() => Trail.maxUpAlt);
+  await page.click('#progress');
+  await page.waitForSelector('#homeYesBtn', { timeout: 3000 });
+  await press('homeYesBtn');
+  await page.waitForSelector('#startBtn', { timeout: 3000 });
+  const r = await page.evaluate(() => ({
+    screen: S.screen, hearts: S.hearts, trail: Trail.maxUpAlt,
+    cont: document.getElementById('contBtn') && document.getElementById('contBtn').textContent,
+    mg: document.getElementById('miniGraph').classList.contains('on'),
+  }));
+  if (r.screen !== 'title' || r.hearts !== 4 || r.trail !== trailBefore) throw new Error(JSON.stringify(r));
+  if (!r.cont || !r.cont.includes('3장')) throw new Error('이어하기가 3장이 아님: ' + r.cont);
+  if (r.mg) throw new Error('처음 화면에 미니 그래프가 남아 있음');
+});
+
+await step('홈: 클리어 직후 처음 화면으로 가도 클리어 대사가 뒤늦게 뜨지 않음', async () => {
+  await page.evaluate(() => { startChapter(1, true); Ch1Scene.playing = false; Ch1Scene.clear(); showTitle(); });
+  await page.waitForTimeout(900);
+  const r = await page.evaluate(() => ({ dlg: S.dialogActive, title: !!document.getElementById('startBtn') }));
+  if (r.dlg || !r.title) throw new Error(JSON.stringify(r));
+});
+
+await step('대화가 끝나면 뭉게 표정이 그 장의 기본 표정으로 돌아옴', async () => {
+  await page.evaluate(() => startChapter(7, false));
+  for (let i = 0; i < 40 && await page.evaluate(() => S.dialogActive); i++) { await tapDialog(); await page.waitForTimeout(40); }
+  await page.waitForTimeout(200);
+  const r = await page.evaluate(() => ({ face: M.face, base: M.baseFace }));
+  if (r.face !== r.base) throw new Error(JSON.stringify(r));
+});
+
+await step('7장: γ=8에서 되돌아오면 자유 대류 고도(1.7 km) 안내', async () => {
+  await page.evaluate(() => {
+    Ch7Scene.setGamma(8);
+    M.place(M.x, Ch7Scene.map.kmToY(0)); Ch7Scene.h = 0; Ch7Scene.simV = 0; Ch7Scene.settled = true;
+    Ch7Scene.poke();
+  });
+  await page.waitForFunction(() => Ch7Scene.verdict !== '', null, { timeout: 12000 });
+  const txt = await page.evaluate(() => document.getElementById('stabRead').textContent);
+  if (!txt.includes('1.7 km')) throw new Error(txt);
+});
+
+await step('화면 크기가 바뀌어도 고도 유지 (1장 1.0 km / 3장 세계 좌표)', async () => {
+  await page.evaluate(() => { S.hearts = 5; startChapter(1, true); M.place(M.x, Ch1Scene.map.kmToY(1.0)); });
+  await page.waitForTimeout(300);
+  await page.setViewportSize({ width: 1024, height: 560 });
+  await page.waitForTimeout(400);
+  const h1 = await page.evaluate(() => Ch1Scene.alt());
+  await page.setViewportSize({ width: 1024, height: 700 });
+  await page.waitForTimeout(300);
+  if (Math.abs(h1 - 1.0) > 0.03) throw new Error(`1장 고도 ${h1.toFixed(3)} km`);
+  await page.evaluate(() => { startChapter(3, true); const p = Ch3Scene.w2s(1.2, Ch3Scene.bandCenter(1.2)); M.place(p.x, p.y); });
+  await page.waitForTimeout(800);
+  const a = await page.evaluate(() => Ch3Scene.mWorld());
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await page.waitForTimeout(300);
+  const b = await page.evaluate(() => Ch3Scene.mWorld());
+  await page.setViewportSize({ width: 1024, height: 700 });
+  if (Math.abs(a.x - b.x) > 0.03 || Math.abs(a.h - b.h) > 0.03) throw new Error(JSON.stringify({ a, b }));
+});
+
+await step('세로 화면(회전 안내)일 때 게임 시간 정지', async () => {
+  await page.evaluate(() => { startChapter(1, true); });
+  await page.setViewportSize({ width: 700, height: 1000 });
+  await page.waitForTimeout(200);
+  const t0 = await page.evaluate(() => S.time);
+  await page.waitForTimeout(800);
+  const t1 = await page.evaluate(() => S.time);
+  await page.setViewportSize({ width: 1024, height: 700 });
+  await page.waitForTimeout(300);
+  const t2 = await page.evaluate(() => S.time);
+  if (t1 - t0 > 0.05) throw new Error(`세로 화면에서 시간 ${(t1 - t0).toFixed(2)}초 흐름`);
+  if (t2 <= t1) throw new Error('가로로 돌아온 뒤 다시 흐르지 않음');
+});
+
+await step('?ch=5: 처음 화면의 "5장부터 시작" → 앞 장 발자국·지도 라벨 채운 채 5장', async () => {
+  const u = new URL('../index.html', import.meta.url); u.search = '?ch=5';
+  await page.goto(u.href);
+  await page.waitForSelector('#jumpBtn', { timeout: 5000 });
+  await press('jumpBtn');
+  await page.waitForTimeout(300);
+  const r = await page.evaluate(() => ({ ch: S.chapter, up: Trail.maxUpAlt, cond: Trail.condensed, labels: S.mapLabels.length }));
+  if (r.ch !== 5 || r.up !== 2 || !r.cond || r.labels !== 5) throw new Error(JSON.stringify(r));
+});
+
 if (errors.length) {
   console.log('\n===== JS 오류 =====');
   errors.forEach(e => console.log(' -', e));
