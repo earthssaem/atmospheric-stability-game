@@ -1,574 +1,502 @@
-// 전체 챕터 관통 스모크 테스트 (headless Chromium)
+// 본편 전체 진행 테스트 (headless Chromium) — 1부·2부를 실제로 끝까지 진행하며
+// 성공 조건(관측·판단), 예상 뒤 피드백, 조작 보조, 기록·엔딩을 확인
 // 실행: npm run test:e2e   (사전: npm install — playwright 설치)
 // 시스템 크로미움을 쓰려면 CHROMIUM_PATH=/path/to/chrome 환경변수로 지정
 import { chromium } from 'playwright';
 
 const errors = [];
-const launchOpts = process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {};
+const launchOpts = { args: ['--autoplay-policy=no-user-gesture-required'], ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) };
 const browser = await chromium.launch(launchOpts);
-const page = await browser.newPage({ viewport: { width: 1024, height: 700 } });
+const [VW, VH] = (process.env.VIEWPORT || '1280x800').split('x').map(Number);   // 예: VIEWPORT=1024x768
+const page = await browser.newPage({ viewport: { width: VW, height: VH } });
+// SHOTS=폴더 를 주면 주요 장면 스크린샷 저장 (검수용)
+const shot = async name => { if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/${VW}x${VH}-${name}.png` }); };
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => {
-  if (m.type() === 'error' && !m.text().includes('Failed to load resource')) errors.push('console: ' + m.text());
+  if (m.type() === 'error' && !m.text().includes('Failed to load resource') && !m.text().includes('net::ERR')) errors.push('console: ' + m.text());
 });
-
-await page.goto(new URL('../index.html', import.meta.url).href);
-await page.waitForTimeout(800);
+const URL0 = new URL('../index.html', import.meta.url).href;
+await page.goto(URL0);
+await page.waitForTimeout(700);
 
 let failed = 0;
 const step = async (name, fn) => {
   try { await fn(); console.log('✅', name); }
   catch (e) { console.log('❌', name, '—', e.message.split('\n')[0]); failed++; }
 };
-
-const press = id => page.evaluate(id => {
-  const el = document.getElementById(id);
-  if (el) el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-}, id);
-const tapDialog = () => page.evaluate(() =>
-  document.getElementById('dialogWrap').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
-
-// 대화/지도/중간 버튼을 계속 눌러 chapter n 의 플레이 상태까지 진행
-async function toChapter(n, timeoutMs = 20000) {
-  const t0 = Date.now();
-  while (Date.now() - t0 < timeoutMs) {
-    const st = await page.evaluate(() => ({
-      ch: S.chapter, dlg: S.dialogActive, paused: S.paused,
-      btns: ['mapNextBtn', 'toGraphBtn', 'graphDoneBtn'].filter(id => document.getElementById(id)),
-      pred: !!document.querySelector('.predOpts .btn'),
-      table: !!document.getElementById('tableDoneBtn'),
-    }));
-    if (st.ch === n && !st.dlg && !st.paused) return;
-    if (st.dlg) await tapDialog();
-    else if (st.pred) await page.evaluate(() => {   // 예측 질문: 정답 고르기
-      const P = PREDICTIONS[S.chapter];
-      document.querySelector(`.predOpts .btn[data-i="${P.ans}"]`).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-    });
-    else if (st.table) await page.evaluate(() => { Fig13.solveAll(); document.getElementById('tableDoneBtn').click(); });
-    else if (st.btns.length) await press(st.btns[0]);
-    await page.waitForTimeout(150);
-  }
-  const ch = await page.evaluate(() => S.chapter);
-  throw new Error(`timeout: chapter=${ch}, expected ${n}`);
-}
-const meters = () => page.evaluate(() => ({
-  alt: document.querySelector('#mAlt .val').textContent,
-  T: document.querySelector('#mT .val').textContent,
-  Td: document.querySelector('#mTd .val').textContent,
-}));
-const miniGraphOn = () => page.evaluate(() => document.getElementById('miniGraph').classList.contains('on'));
-
-await step('타이틀 화면 표시', () => page.waitForSelector('#startBtn'));
-
-await step('게임 시작 → 0장 플레이', async () => {
-  await press('startBtn');
-  await toChapter(0);
-});
-
-await step('0장: 미니 그래프 숨김 (데이터 없음)', async () => {
-  if (await miniGraphOn()) throw new Error('0장에서 미니 그래프가 숨겨져야 함');
-});
-
-await step('0장: 반짝이 3개 수집 → 1장', async () => {
-  for (const i of [0, 1, 2]) {
-    await page.evaluate(i => {
-      const sp = Ch0Scene.sparks[i];
-      M.place(sp.fx * innerWidth, sp.fy * innerHeight);
-    }, i);
-    await page.waitForTimeout(300);
-  }
-  await toChapter(1);
-});
-
-await step('1장: 미니 그래프 표시 + 인트로 직후 계기판이 1장 값(0.08km/19.2℃)', async () => {
-  if (!await miniGraphOn()) throw new Error('1장에서 미니 그래프가 보여야 함');
-  const m = await meters();
-  if (!m.T.startsWith('19.')) throw new Error('계기판이 이전 챕터 값: ' + JSON.stringify(m));
-});
-
-await step('1장: HUD 물리값 (0.5km→15℃/11℃)', async () => {
-  await page.evaluate(() => { M.place(M.x, Ch1Scene.map.kmToY(0.5)); });
-  await page.waitForTimeout(250);
-  const m = await meters();
-  if (!m.alt.startsWith('0.50') || !m.T.startsWith('15.0') || !m.Td.startsWith('11.0'))
-    throw new Error(JSON.stringify(m));
-});
-
-await step('1장: 오버슈트 → 하트 -1 + 흔들림', async () => {
-  const before = await page.evaluate(() => S.hearts);
-  await page.evaluate(() => { M.place(M.x, Ch1Scene.map.kmToY(1.7)); });
-  await page.waitForTimeout(600);
-  const after = await page.evaluate(() => S.hearts);
-  if (after !== before - 1) throw new Error(`hearts ${before}→${after}`);
-});
-
-await step('1장: 목표 존 3초 유지 → 2장', async () => {
-  await page.evaluate(() => { M.place(M.x, Ch1Scene.map.kmToY(1.0)); });
-  await page.waitForTimeout(3600);
-  await toChapter(2);
-});
-
-await step('발자국: 상승 기록 누적 + 미니 그래프 경로 (2장 진입 시점)', async () => {
-  const r = await page.evaluate(() => ({
-    maxUp: Trail.maxUpAlt, condensed: Trail.condensed,
-    on: document.getElementById('miniGraph').classList.contains('on'),
-    dT: document.getElementById('mgUpT').getAttribute('d'),
-  }));
-  if (r.maxUp < 1.0) throw new Error(`maxUpAlt=${r.maxUp}`);
-  if (!r.condensed) throw new Error('응결 마커 없음');
-  if (!r.on) throw new Error('2장 미니 그래프 미표시');
-  // 1.0km 초과분이 있으므로 기온선은 꺾인 3점 경로 (M + L + L)
-  if ((r.dT.match(/L/g) || []).length < 2) throw new Error('기온선 꺾임 없음: ' + r.dT);
-});
-
-await step('발자국: trailUpPoints(1.5) = (20,0)→(10,1)→(7.5,1.5)', async () => {
-  const ok = await page.evaluate(() => {
-    const p = trailUpPoints(20, 12, 1.5);
-    const want = { T: [[20, 0], [10, 1], [7.5, 1.5]], Td: [[12, 0], [10, 1], [7.5, 1.5]] };
-    return JSON.stringify(p) === JSON.stringify(want);
-  });
-  if (!ok) throw new Error('trailUpPoints 불일치');
-});
-
-await step('2장: 응결 존 2초 → 구름 옷 → 3장', async () => {
-  await page.evaluate(() => { M.place(M.x, Ch2Scene.map.kmToY(1.0)); });
-  await page.waitForTimeout(2600);
-  const coat = await page.evaluate(() => M.coat);
-  if (!coat) throw new Error('구름 옷 미착용');
-  await toChapter(3);
-});
-
-await step('3장: 가이드 밴드 따라 정상 → 4장', async () => {
-  for (let x = 0.3; x <= 3.9; x += 0.1) {
-    if (await page.evaluate(() => S.dialogActive)) { // 감률 변화 대사
-      await tapDialog();
-      await page.waitForTimeout(150);
-      await page.evaluate(() => { if (S.dialogActive) Dialog.tap(); });
-    }
-    const done = await page.evaluate(() => S.chapter !== 3 || !Ch3Scene.playing);
-    if (done) break;
-    await page.evaluate(x => {
-      const p = Ch3Scene.w2s(x, Ch3Scene.bandCenter(x));
-      M.place(p.x, p.y);
-    }, x);
-    await page.waitForTimeout(90);
-  }
-  await toChapter(4);
-});
-
-await step('4장: HUD = 정상 2.0 km · 5℃', async () => {
-  const m = await meters();
-  if (!m.alt.startsWith('2.00') || !m.T.startsWith('5.0')) throw new Error(JSON.stringify(m));
-});
-
-await step('팽창: 정상(2km)에서 몸 크기 1.35배', async () => {
-  await page.waitForTimeout(1500); // r 스무딩 수렴 대기
-  const [r, want] = await page.evaluate(() =>
-    [M.r, TUNING.mungge.baseR * (1 + TUNING.mungge.growPerKm * 2)]);
-  if (r < want - 4) throw new Error(`r=${r.toFixed(1)}, want≈${want.toFixed(1)}`);
-});
-
-await step('4장: 미니 그래프 숨김 (리듬 집중)', async () => {
-  if (await miniGraphOn()) throw new Error('4장에서 미니 그래프가 숨겨져야 함');
-});
-
-await step('4장: 박자 그리드 동기 (노트 tₖ = t0 + (4+pattern[k])×beat, BGM 박 0 = t0)', async () => {
-  await page.waitForFunction(() => Ch4Scene.playing, null, { timeout: 8000 });
-  const r = await page.evaluate(() => {
-    const s = Ch4Scene, c = TUNING.ch4;
-    const gridOk = s.notes.every((n, k) =>
-      Math.abs((n.t - s.t0) - (c.countInBeats + c.pattern[k]) * s.beatSec) < 1e-9);
-    const bgmOk = !AudioSys.ctx || Math.abs(AudioSys.bgmStartTime - s.t0) < 1e-9;
-    return { gridOk, bgmOk, n: s.notes.length };
-  });
-  if (!r.gridOk) throw new Error('노트-박자 그리드 불일치');
-  if (!r.bgmOk) throw new Error('BGM 박 0 ≠ t0');
-  if (r.n !== 20) throw new Error(`notes=${r.n}`);
-});
-
-await step('4장: 리듬 노트 자동 연주(14+ 성공) → 5장', async () => {
-  await page.evaluate(() => {
-    window.__auto = setInterval(() => {
-      const sc = Ch4Scene;
-      if (!sc.playing) return;
-      const now = AudioSys.now() - TUNING.ch4.audioOffset;
-      const n = sc.notes.find(n => !n.hit && !n.miss && Math.abs(now - n.t) < 0.06);
-      if (n) { sc.lastTap = -9; sc.pd(0, 0); }
-    }, 25);
-  });
-  await page.waitForFunction(() => Ch4Scene.hits + Ch4Scene.misses >= 20, null, { timeout: 40000 });
-  await page.evaluate(() => clearInterval(window.__auto));
-  const [hits, misses] = await page.evaluate(() => [Ch4Scene.hits, Ch4Scene.misses]);
-  console.log(`   (hits=${hits}, misses=${misses})`);
-  if (hits < 14) throw new Error(`hits=${hits}`);
-  await toChapter(5);
-});
-
-await step('5장: 미니 그래프 표시 + 하강 HUD (1.0km→15℃/7℃)', async () => {
-  if (!await miniGraphOn()) throw new Error('5장에서 미니 그래프가 보여야 함');
-  await page.evaluate(() => {
-    const p = Ch5Scene.w2s(1.8, 1.0);
-    M.place(p.x, p.y); M.held = true;
-  });
-  await page.waitForTimeout(300);
-  const m = await meters();
-  if (!m.T.startsWith('15.0') || !m.Td.startsWith('7.0')) throw new Error(JSON.stringify(m));
-});
-
-await step('5장: 착지 존 저속 착지 (지표 25℃/9℃) → 6장', async () => {
-  await page.evaluate(() => {
-    const p = Ch5Scene.w2s(3.6, 0.25);
-    M.place(p.x, p.y); M.held = true;
-  });
-  for (let h = 0.22; h >= -0.02; h -= 0.03) {
-    await page.evaluate(h => {
-      const p = Ch5Scene.w2s(3.6, h);
-      M.tx = p.x; M.ty = p.y;
-    }, Math.max(0, h));
-    await page.waitForTimeout(130);
-  }
-  await page.waitForTimeout(800);
-  const m = await meters();
-  if (!m.T.startsWith('25.0') || !m.Td.startsWith('9.0')) throw new Error(JSON.stringify(m));
-  // 6장 비교 카드가 뜰 때까지 (대사·여정 지도만 넘김 — 비교 카드·표는 다음 단계에서 직접 검증)
-  for (let i = 0; i < 120 && !(await page.evaluate(() => !!document.getElementById('toGraphBtn'))); i++) {
-    const st = await page.evaluate(() => ({ dlg: S.dialogActive, map: !!document.getElementById('mapNextBtn') }));
-    if (st.dlg) await tapDialog(); else if (st.map) await press('mapNextBtn');
-    await page.waitForTimeout(120);
-  }
-  if (await page.evaluate(() => S.chapter) !== 6) throw new Error('6장 진입 실패');
-});
-
-await step('압축: 착지 후 몸 크기 원래대로 (r<50px)', async () => {
-  await page.waitForTimeout(1500);
-  const r = await page.evaluate(() => M.r);
-  if (r > 50) throw new Error(`r=${r.toFixed(1)} — 하강 후에도 큼`);
-});
-
-await step('발자국: 하강 기록 (minDownAlt≈0, 분홍 하강선)', async () => {
-  const r = await page.evaluate(() => ({
-    down: Trail.downStarted, minDown: Trail.minDownAlt,
-    dDn: document.getElementById('mgDnT').getAttribute('d'),
-  }));
-  if (!r.down) throw new Error('downStarted=false');
-  if (r.minDown > 0.1) throw new Error(`minDownAlt=${r.minDown}`);
-  if (!r.dDn || !r.dDn.startsWith('M')) throw new Error('하강선 미기록');
-});
-
-await step('6장: 비교 카드(상대 습도 60%→36%) + 그래프 리플레이', async () => {
-  if (await miniGraphOn()) throw new Error('6장에서 미니 그래프가 숨겨져야 함');
-  await page.waitForSelector('#toGraphBtn', { timeout: 15000 });
-  const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
-  if (!txt.includes('60%') || !txt.includes('36%')) throw new Error('비교 카드에 상대 습도 없음');
-  await press('toGraphBtn');
-  await page.waitForSelector('#graphDoneBtn', { timeout: 5000 });
-  await press('graphDoneBtn');
-});
-
-await step('6장: 그림 Ⅲ-13 표 — 틀린 카드는 안 들어가고 힌트, 맞는 카드는 채워짐, 다 채워야 계속', async () => {
-  await page.waitForSelector('#tableDoneBtn', { timeout: 5000 });
-  const r = await page.evaluate(() => {
-    const wrong = Fig13.chips.findIndex(c => c.t === '포화');          // ① 공기 상태 칸(정답: 불포화)에 '포화'
-    Fig13.pickChip(wrong); Fig13.pickCell(0, 0);
-    const afterWrong = { filled: Fig13.filled[0][0], hint: document.getElementById('f13hint').textContent, m: Fig13.mistakes };
-    const right = Fig13.chips.findIndex(c => c.t === '불포화' && !c.used);
-    Fig13.pickCell(0, 0); Fig13.pickChip(right);                         // 칸 먼저 → 카드
-    const afterRight = Fig13.filled[0][0];
-    const disabledBefore = document.getElementById('tableDoneBtn').disabled;
-    Fig13.solveAll();
-    return { afterWrong, afterRight, disabledBefore, disabledAfter: document.getElementById('tableDoneBtn').disabled };
-  });
-  if (r.afterWrong.filled || r.afterWrong.m !== 1 || !r.afterWrong.hint.includes('불포화')) throw new Error('오답 처리: ' + JSON.stringify(r.afterWrong));
-  if (!r.afterRight) throw new Error('정답 카드가 안 들어감');
-  if (!r.disabledBefore || r.disabledAfter) throw new Error('계속 버튼 활성 조건 이상 ' + JSON.stringify(r));
-  await page.evaluate(() => document.getElementById('tableDoneBtn').click());
-});
-
-await step('6장 → 7장 푄 실험실 (패널 표시, 미니 그래프 숨김)', async () => {
-  await toChapter(7, 30000);
-  const on = await page.evaluate(() => document.getElementById('labPanel').classList.contains('on'));
-  if (!on) throw new Error('실험실 패널 미표시');
-  if (await miniGraphOn()) throw new Error('7장에서 미니 그래프가 숨겨져야 함');
-});
-
-const labSend = async (Td, Mk, guess) => {
-  await page.evaluate(([Td, Mk, guess]) => { Ch7Scene.setCond(Td, Mk); Ch7Scene.setGuess(guess); Ch7Scene.send(); }, [Td, Mk, guess]);
-  await page.waitForFunction(() => Ch7Scene.result, null, { timeout: 10000 });
-  return page.evaluate(() => ({ arr: Ch7Scene.result.arrT, cloud: Ch7Scene.result.cloud, m: { ...Ch7Scene.missions },
-    read: document.getElementById('labRead').textContent, meterT: document.querySelector('#mT .val').textContent }));
+const ev = (fn, arg) => page.evaluate(fn, arg);
+const wait = ms => page.waitForTimeout(ms);
+const click = async sel => {
+  await page.waitForSelector(sel, { timeout: 8000 });
+  await ev(s => document.querySelector(s).click(), sel);
+  await wait(60);
 };
-await step('7장: 이슬점 16℃·산 2.5 km, 예측 30℃ → 도착 30℃ (예측 성공, 30℃ 미션)', async () => {
-  const r = await labSend(16, 2.5, 30);
-  if (r.arr !== 30 || !r.cloud || !r.m.hot30) throw new Error(JSON.stringify(r));
-  if (!r.read.includes('예측 성공')) throw new Error(r.read);
-  if (!r.meterT.startsWith('30.0')) throw new Error('계기판이 도착 기온이 아님: ' + r.meterT);
-});
-await step('7장: 이슬점 4℃·산 1.5 km → 구름 없음, 도착 = 출발 20℃ (푄 없음 미션, 예측 2회)', async () => {
-  const r = await labSend(4, 1.5, 20);
-  if (r.arr !== 20 || r.cloud || !r.m.noFoehn || !r.m.guess2) throw new Error(JSON.stringify(r));
-  if (!r.read.includes('푄 없음')) throw new Error(r.read);
-});
-
-await step('여행 끝내기 → 수료 화면 (남은 하트 · 보너스 버튼)', async () => {
-  await press('labEndBtn');
-  await page.waitForSelector('#bonusBtn', { timeout: 5000 });
-  const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
-  if (!txt.includes('남은 하트')) throw new Error('하트 표시 없음');
-});
-
-await step('보너스(대기 안정도) 진입: 시뮬레이터 패널', async () => {
-  await press('bonusBtn');
-  await toChapter(8, 20000);
-  const panelOn = await page.evaluate(() => document.getElementById('simPanel').classList.contains('on'));
-  if (!panelOn) throw new Error('시뮬레이터 패널 미표시');
-});
-
-await step('보너스: γ=12 쿡 → 절대 불안정(계속 상승)', async () => {
-  await page.evaluate(() => { Ch8Scene.setGamma(12); Ch8Scene.poke(); });
-  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 8000 });
-  const v = await page.evaluate(() => Ch8Scene.verdict);
-  if (v !== 'unstable') throw new Error(`verdict=${v}`);
-});
-
-await step('보너스: γ=4 쿡 → 절대 안정(제자리 복귀)', async () => {
-  await page.evaluate(() => {
-    Ch8Scene.setGamma(4);
-    M.place(M.x, Ch8Scene.map.kmToY(0));
-    Ch8Scene.h = 0; Ch8Scene.simV = 0; Ch8Scene.settled = true;
-    Ch8Scene.poke();
-  });
-  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 12000 });
-  const v = await page.evaluate(() => Ch8Scene.verdict);
-  if (v !== 'stable') throw new Error(`verdict=${v}`);
-});
-
-await step('보너스: γ=8, 1.9km에서 놓기 → 조건부 상승', async () => {
-  await page.evaluate(() => {
-    Ch8Scene.setGamma(8);
-    M.place(M.x, Ch8Scene.map.kmToY(1.9));
-    Ch8Scene.h = 1.9; Ch8Scene.settled = false; Ch8Scene.simV = 0; Ch8Scene.verdict = '';
-  });
-  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 8000 });
-  const v = await page.evaluate(() => Ch8Scene.verdict);
-  if (v !== 'unstable') throw new Error(`verdict=${v}`);
-});
-
-await step('보너스 끝내기 → 수료 화면(보너스 표시) → 처음 화면 + 이어하기', async () => {
-  await press('simEndBtn');
-  await page.waitForSelector('#toTitleBtn', { timeout: 5000 });
-  const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
-  if (!txt.includes('대기 안정도(보너스)')) throw new Error('보너스 표시 없음');
-  await press('toTitleBtn');
-  await page.waitForSelector('#contBtn', { timeout: 5000 });
-});
-
-// ===================== v1.3 개선 사항 검증 =====================
-const waitPlaying4 = () => page.waitForFunction(() =>
-  S.chapter === 4 && Ch4Scene.playing && AudioSys.now() > Ch4Scene.firstNote + 0.3, null, { timeout: 10000 });
-
-await step('처음 화면: 제작자 푸터 + 허브 링크(새 탭)', async () => {
-  const f = await page.evaluate(() => {
-    const a = document.querySelector('#overlay footer a.hub');
-    return a && { href: a.href, target: a.target, rel: a.rel, txt: a.closest('footer').textContent };
-  });
-  if (!f) throw new Error('푸터/허브 링크 없음');
-  if (f.href !== 'https://earthssaem-lab.vercel.app/' || f.target !== '_blank' || !f.rel.includes('noopener'))
-    throw new Error(JSON.stringify(f));
-  if (!f.txt.includes(' | ')) throw new Error('구분자 " | " 없음');
-});
-
-await step('4장: 박자 없이 마구 두드리면(0.125초 간격) 통과 못 함', async () => {
-  await page.evaluate(() => { S.hearts = 99; startChapter(4, true); });
-  await waitPlaying4();
-  await page.evaluate(() => { window.__mash = setInterval(() => Ch4Scene.pd(0, 0), 125); });
-  await page.waitForFunction(() => !Ch4Scene.playing || S.chapter !== 4, null, { timeout: 40000 });
-  await page.evaluate(() => clearInterval(window.__mash));
-  const r = await page.evaluate(() => ({ hits: Ch4Scene.hits, misses: Ch4Scene.misses, need: TUNING.ch4.needHits }));
-  console.log(`   (연타: hits=${r.hits}, misses=${r.misses})`);
-  if (r.hits >= r.need) throw new Error('연타로 통과됨 ' + JSON.stringify(r));
-});
-
-await step('4장: 하트 0 → 재도전 시 이전 판 "쿵" 예약이 남지 않음', async () => {
-  await page.evaluate(() => { S.hearts = 1; startChapter(4, true); });
-  await waitPlaying4();
-  await page.waitForSelector('#retryBtn', { timeout: 15000 }); // miss 2회 → 하트 0
-  const left = await page.evaluate(() => AudioSys.pendingCount());
-  if (left !== 0) throw new Error(`재도전 화면 뒤에 예약 소리 ${left}개`);
-  await press('retryBtn');
-  await page.waitForTimeout(200);
-  const r = await page.evaluate(() => {
-    const now = AudioSys.now();
-    return { times: new Set(AudioSys.sched.filter(s => s.t > now).map(s => s.t.toFixed(4))).size,
-             want: TUNING.ch4.countInBeats + TUNING.ch4.totalNotes };
-  });
-  if (r.times > r.want) throw new Error(`예약 시각 ${r.times}개 > 새 판 ${r.want}개 (이전 판 소리 남음)`);
-});
-
-await step('4장: 홈 확인 창 동안 리듬이 멈췄다가 "계속하기"로 이어짐', async () => {
-  await page.evaluate(() => { S.hearts = 5; startChapter(4, true); });
-  await waitPlaying4();
-  const before = await page.evaluate(() => ({ m: Ch4Scene.misses, t: AudioSys.now() }));
-  await page.click('#progress');
-  await page.waitForSelector('#homeNoBtn', { timeout: 3000 });
-  await page.waitForTimeout(2500);
-  const mid = await page.evaluate(() => AudioSys.now());
-  await press('homeNoBtn');
-  await page.waitForTimeout(300);
-  const after = await page.evaluate(() => ({ m: Ch4Scene.misses, paused: S.paused }));
-  if (mid - before.t > 0.5) throw new Error(`확인 창 동안 리듬 시계가 ${(mid - before.t).toFixed(2)}초 흘렀음`);
-  if (after.m - before.m > 1) throw new Error(`확인 창 뒤 miss 급증 ${before.m}→${after.m}`);
-  if (after.paused) throw new Error('계속하기 후에도 멈춤');
-});
-
-await step('홈: 3장 플레이 중 → 확인 → 처음 화면 (하트·발자국 유지, 이어하기 = 3장)', async () => {
-  await page.evaluate(() => { S.hearts = 4; startChapter(3, true); });
-  await page.waitForTimeout(300);
-  const trailBefore = await page.evaluate(() => Trail.maxUpAlt);
-  await page.click('#progress');
-  await page.waitForSelector('#homeYesBtn', { timeout: 3000 });
-  await press('homeYesBtn');
-  await page.waitForSelector('#startBtn', { timeout: 3000 });
-  const r = await page.evaluate(() => ({
-    screen: S.screen, hearts: S.hearts, trail: Trail.maxUpAlt,
-    cont: document.getElementById('contBtn') && document.getElementById('contBtn').textContent,
-    mg: document.getElementById('miniGraph').classList.contains('on'),
-  }));
-  if (r.screen !== 'title' || r.hearts !== 4 || r.trail !== trailBefore) throw new Error(JSON.stringify(r));
-  if (!r.cont || !r.cont.includes('3장')) throw new Error('이어하기가 3장이 아님: ' + r.cont);
-  if (r.mg) throw new Error('처음 화면에 미니 그래프가 남아 있음');
-});
-
-await step('홈: 클리어 직후 처음 화면으로 가도 클리어 대사가 뒤늦게 뜨지 않음', async () => {
-  await page.evaluate(() => { startChapter(1, true); Ch1Scene.playing = false; Ch1Scene.clear(); showTitle(); });
-  await page.waitForTimeout(900);
-  const r = await page.evaluate(() => ({ dlg: S.dialogActive, title: !!document.getElementById('startBtn') }));
-  if (r.dlg || !r.title) throw new Error(JSON.stringify(r));
-});
-
-await step('대화가 끝나면 뭉게 표정이 그 장의 기본 표정으로 돌아옴', async () => {
-  await page.evaluate(() => startChapter(7, false));
-  for (let i = 0; i < 40 && await page.evaluate(() => S.dialogActive); i++) { await tapDialog(); await page.waitForTimeout(40); }
-  await page.waitForTimeout(200);
-  const r = await page.evaluate(() => ({ face: M.face, base: M.baseFace }));
-  if (r.face !== r.base) throw new Error(JSON.stringify(r));
-});
-
-await step('보너스: γ=8에서 되돌아오면 자유 대류 고도(1.7 km) 안내', async () => {
-  await page.evaluate(() => {
-    startChapter(8, true);
-    Ch8Scene.setGamma(8);
-    M.place(M.x, Ch8Scene.map.kmToY(0)); Ch8Scene.h = 0; Ch8Scene.simV = 0; Ch8Scene.settled = true;
-    Ch8Scene.poke();
-  });
-  await page.waitForFunction(() => Ch8Scene.verdict !== '', null, { timeout: 12000 });
-  const txt = await page.evaluate(() => document.getElementById('stabRead').textContent);
-  if (!txt.includes('1.7 km')) throw new Error(txt);
-});
-
-await step('화면 크기가 바뀌어도 고도 유지 (1장 1.0 km / 3장 세계 좌표)', async () => {
-  await page.evaluate(() => { S.hearts = 5; startChapter(1, true); M.place(M.x, Ch1Scene.map.kmToY(1.0)); });
-  await page.waitForTimeout(300);
-  await page.setViewportSize({ width: 1024, height: 560 });
-  await page.waitForTimeout(400);
-  const h1 = await page.evaluate(() => Ch1Scene.alt());
-  await page.setViewportSize({ width: 1024, height: 700 });
-  await page.waitForTimeout(300);
-  if (Math.abs(h1 - 1.0) > 0.03) throw new Error(`1장 고도 ${h1.toFixed(3)} km`);
-  await page.evaluate(() => { startChapter(3, true); const p = Ch3Scene.w2s(1.2, Ch3Scene.bandCenter(1.2)); M.place(p.x, p.y); });
-  await page.waitForTimeout(800);
-  const a = await page.evaluate(() => Ch3Scene.mWorld());
-  await page.setViewportSize({ width: 1180, height: 820 });
-  await page.waitForTimeout(300);
-  const b = await page.evaluate(() => Ch3Scene.mWorld());
-  await page.setViewportSize({ width: 1024, height: 700 });
-  if (Math.abs(a.x - b.x) > 0.03 || Math.abs(a.h - b.h) > 0.03) throw new Error(JSON.stringify({ a, b }));
-});
-
-await step('세로 화면(회전 안내)일 때 게임 시간 정지', async () => {
-  await page.evaluate(() => { startChapter(1, true); });
-  await page.setViewportSize({ width: 700, height: 1000 });
-  await page.waitForTimeout(200);
-  const t0 = await page.evaluate(() => S.time);
-  await page.waitForTimeout(800);
-  const t1 = await page.evaluate(() => S.time);
-  await page.setViewportSize({ width: 1024, height: 700 });
-  await page.waitForTimeout(300);
-  const t2 = await page.evaluate(() => S.time);
-  if (t1 - t0 > 0.05) throw new Error(`세로 화면에서 시간 ${(t1 - t0).toFixed(2)}초 흐름`);
-  if (t2 <= t1) throw new Error('가로로 돌아온 뒤 다시 흐르지 않음');
-});
-
-// ===================== v1.4 교과서 연계 검증 =====================
-await step('계기판: 상대 습도 60% · 불포화 상태 → 4장 정상은 포화(100%)', async () => {
-  await page.evaluate(() => { S.hearts = 5; startChapter(0, true); });
-  await page.waitForTimeout(200);
-  const a = await page.evaluate(() => ({ rh: document.querySelector('#mRH .val').textContent, air: document.getElementById('airState').textContent }));
-  if (!a.rh.startsWith('60') || !a.air.includes('불포화')) throw new Error(JSON.stringify(a));
-  await page.evaluate(() => startChapter(4, true));
-  await page.waitForTimeout(200);
-  const b = await page.evaluate(() => ({ rh: document.querySelector('#mRH .val').textContent, air: document.getElementById('airState').textContent }));
-  if (!b.rh.startsWith('100') || !b.air.includes('포화 상태')) throw new Error(JSON.stringify(b));
-});
-
-await step('1장: 플레이 전에 예측 질문 → 오답 선택 → 클리어 후 여정 지도에 예측 비교 + 교과서 용어 카드', async () => {
-  await page.evaluate(() => { S.pred = {}; startChapter(1, false); });
-  for (let i = 0; i < 20 && !(await page.evaluate(() => !!document.querySelector('.predOpts .btn'))); i++) {
-    await tapDialog(); await page.waitForTimeout(80);
+// 대사를 끝까지 (Enter 키로 — 키보드 진행 확인 겸)
+const dialogs = async (max = 40) => {
+  for (let i = 0; i < max; i++) {
+    if (!(await ev(() => S.dialogActive))) return;
+    await page.keyboard.press('Enter'); await wait(30);
   }
-  const playingBefore = await page.evaluate(() => Ch1Scene.playing);
-  if (playingBefore) throw new Error('예측 전에 플레이가 시작됨');
-  await page.evaluate(() => document.querySelector('.predOpts .btn[data-i="0"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
-  for (let i = 0; i < 20 && await page.evaluate(() => S.dialogActive); i++) { await tapDialog(); await page.waitForTimeout(60); }
-  await page.waitForFunction(() => Ch1Scene.playing, null, { timeout: 5000 });
-  await page.evaluate(() => { M.place(M.x, Ch1Scene.map.kmToY(1.0)); });
-  await page.waitForFunction(() => !Ch1Scene.playing, null, { timeout: 8000 });
-  for (let i = 0; i < 30 && !(await page.evaluate(() => !!document.getElementById('mapNextBtn'))); i++) { await tapDialog(); await page.waitForTimeout(100); }
-  const txt = await page.evaluate(() => document.getElementById('overlay').textContent);
-  if (!txt.includes('내 예측: 19℃') || !txt.includes('🤔')) throw new Error('예측 비교 없음');
-  if (!txt.includes('건조 단열 감률') || !txt.includes('이슬점 감률')) throw new Error('용어 카드 없음');
+};
+const until = async (fn, ms = 10000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) { if (await ev(fn)) return; await wait(60); }
+  throw new Error('timeout: ' + fn.toString().slice(0, 80));
+};
+const overlayText = () => ev(() => document.getElementById('overlay').textContent + ' ' + document.getElementById('actBar').textContent);
+const pickOpt = async i => { await page.waitForSelector(`#overlay .opts .btn[data-i="${i}"]`); await click(`#overlay .opts .btn[data-i="${i}"]`); };
+const meters = () => ev(() => ({ alt: document.querySelector('#mAlt .val').textContent, T: document.querySelector('#mT .val').textContent, Td: document.querySelector('#mTd .val').textContent, rh: document.querySelector('#mRH .val').textContent }));
+
+/* ===================== 1부 ===================== */
+await step('처음 화면: 1부·2부 선택 + 챕터 고르기 + 푸터', async () => {
+  await shot('00-title');
+  const t = await overlayText();
+  for (const k of ['1부 · 산을 건너는 뭉게', '2부 · 놓아주면 어디로 갈까?', '챕터 고르기', '연경쌤의 지구과학 실험실 둘러보기']) if (!t.includes(k)) throw new Error('없음: ' + k);
 });
 
-await step('3장: 상승 응결 고도 위에서는 영동 쪽 비탈에 비가 내림', async () => {
-  await page.evaluate(() => { startChapter(3, true); const p = Ch3Scene.w2s(1.5, Ch3Scene.bandCenter(1.5)); M.place(p.x, p.y); });
-  await page.waitForTimeout(300);
-  for (let i = 0; i < 10 && await page.evaluate(() => S.dialogActive); i++) { await tapDialog(); await page.waitForTimeout(60); } // 감률 변화 대사
-  await page.evaluate(() => { const p = Ch3Scene.w2s(1.5, Ch3Scene.bandCenter(1.5)); M.place(p.x, p.y); });
-  await page.waitForTimeout(500);
-  const n = await page.evaluate(() => Ch3Scene.drops.length);
-  if (n < 1) throw new Error(`빗방울 ${n}개`);
-  await page.evaluate(() => { const p = Ch3Scene.w2s(0.3, 0.75); M.place(p.x, p.y); Ch3Scene.drops = []; Ch3Scene.playing = false; });
-  await page.waitForTimeout(400);
-  const n2 = await page.evaluate(() => Ch3Scene.drops.length);
-  if (n2 > 0) throw new Error(`응결 고도 아래(0.75 km)에서도 비 ${n2}개`);
+await step('프롤로그: 관측소 메시지 → 버튼으로 짧은 조작 연습 → 출발 기록', async () => {
+  await click('#p1Btn');
+  await wait(400); await shot('01-station');
+  const who = await ev(() => document.getElementById('dName').textContent);
+  if (!who.includes('관측소')) throw new Error('첫 메시지가 관측소가 아님: ' + who);
+  await dialogs();
+  await until(() => document.getElementById('moveBtns').classList.contains('on'));
+  await ev(() => document.querySelector('#moveBtns button[data-dx="1"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+  await until(() => !SeaScene.practice, 6000);
+  await ev(() => document.querySelector('#moveBtns button[data-dx="1"]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  await dialogs();
+  await click('#obNext');
+  const o = await ev(() => S.rec.obs.find(x => x.id === 'start'));
+  if (!o || o.T !== 20 || o.Td !== 12 || Math.round(o.rh) !== 60) throw new Error(JSON.stringify(o));
+  await click('#mapNextBtn');
 });
 
-await step('보너스: 층운은 응결 고도(1.0 km) 위에만 그림', async () => {
-  await page.evaluate(() => { startChapter(8, true); Ch8Scene.setGamma(4); Ch8Scene.stratus = 1; });
-  await page.waitForTimeout(200);
-  // 응결 고도선 아래 띠(0.3~0.9 km)에 층운 색(#EDF2F5)이 없어야 함
-  const below = await page.evaluate(() => {
-    const y0 = Ch8Scene.map.kmToY(0.9), y1 = Ch8Scene.map.kmToY(0.3), x = Math.round(innerWidth * 0.4);
-    const d = ctx.getImageData(x * DPR, y0 * DPR, 1, (y1 - y0) * DPR).data;
-    let hit = 0; for (let i = 0; i < d.length; i += 4) if (d[i] === 237 && d[i + 1] === 242 && d[i + 2] === 245) hit++;
-    return hit;
-  });
-  if (below > 0) throw new Error(`응결 고도 아래에 층운 픽셀 ${below}`);
+await step('첫 관측: 예상(오답) → 키보드 ▲로 0.5 km 정확히 정지 → 계기판 15℃/11℃', async () => {
+  await until(() => S.chapter === 1);
+  await dialogs();
+  await page.waitForSelector('#overlay .opts'); await shot('02-predict');
+  await pickOpt(0);                      // 오답 예상 — 감점 없음
+  const revealed = await ev(() => S.dialogActive && /1 km에서|같아진다/.test(Dialog.lines[Dialog.idx].text));
+  if (revealed) throw new Error('예상 직후 정답을 말함');
+  await until(() => RiseScene.playing);
+  await page.keyboard.down('ArrowUp');
+  await until(() => RiseScene.stopped, 12000);
+  await page.keyboard.up('ArrowUp');
+  const m = await meters();
+  if (!m.alt.startsWith('0.50') || !m.T.startsWith('15.0') || !m.Td.startsWith('11.0')) throw new Error(JSON.stringify(m));
+  await shot('03-observe05');
+  await click('#obNext');
+});
+await step('첫 관측: 판단 오답 → 그 선택에 맞는 근거(12℃ → 11℃) → 근거 다시 보기 → 정답', async () => {
+  await pickOpt(1);
+  await shot('04-judge-wrong');
+  const t = await overlayText();
+  if (!t.includes('12℃ → 11℃')) throw new Error('구체적 근거 없음: ' + t.slice(0, 120));
+  await click('#jgEvi');
+  await page.waitForSelector('#overlay svg.bg');
+  await click('#evBack');
+  await pickOpt(0);
+  await click('#jgNext');
+  const j = await ev(() => S.rec.judge.j1);
+  if (j.firstOk || !j.ok || j.tries !== 2) throw new Error(JSON.stringify(j));
+});
+await step('첫 관측: 예상 돌아보기 — 고른 답 맞춤 안내 + 관찰로 생각 고치기', async () => {
+  await dialogs();
+  await page.waitForSelector('#pvRev'); await shot('05-review');
+  const t = await overlayText();
+  if (!t.includes('두 값이 같은 만큼 내려갈 거라고 예상했구나')) throw new Error(t.slice(0, 140));
+  if (!(await ev(() => document.getElementById('pvNext').disabled))) throw new Error('생각 고치기 전 계속 버튼 활성');
+  await click('#pvRev'); await click('#pvNext');
+  if (!(await ev(() => S.rec.pred.p1.revised))) throw new Error('revised 기록 없음');
+  await click('#mapNextBtn');
 });
 
-await step('?ch=5: 처음 화면의 "5장부터 시작" → 앞 장 발자국·지도 라벨 채운 채 5장', async () => {
-  const u = new URL('../index.html', import.meta.url); u.search = '?ch=5';
-  await page.goto(u.href);
-  await page.waitForSelector('#jumpBtn', { timeout: 5000 });
-  await press('jumpBtn');
-  await page.waitForTimeout(300);
-  const r = await page.evaluate(() => ({ ch: S.chapter, up: Trail.maxUpAlt, cond: Trail.condensed, labels: S.mapLabels.length }));
-  if (r.ch !== 5 || r.up !== 2 || !r.cond || r.labels !== 5) throw new Error(JSON.stringify(r));
+await step('구름이 시작되는 곳: 정답 띠 없이 깃발로 예상 높이 표시(1.2 km)', async () => {
+  await until(() => S.chapter === 2);
+  await dialogs();
+  await page.waitForSelector('#mkOk');
+  const flags = await ev(() => RiseScene.cfg.flags.length);
+  if (flags) throw new Error('정답 띠/깃발이 미리 보임');
+  await click('#mkHint'); await shot('06-mark');
+  const hint = await ev(() => document.getElementById('mkHintT').textContent);
+  if (!hint.includes('8℃')) throw new Error('힌트 없음');
+  await click('#mkOk');
+  if (Math.abs((await ev(() => S.rec.marks.lcl)) - 1.2) > 1e-9) throw new Error('표시 높이 기록 안 됨');
+});
+await step('구름이 시작되는 곳: 1.0 km 미만에서는 물방울 없음, 1.0 km에서 자동 정지 + 물방울(포화)', async () => {
+  await until(() => RiseScene.playing);
+  await ev(() => { M.held = true; M.ty = RiseScene.map.kmToY(0.9); });
+  await until(() => RiseScene.alt() > 0.88, 6000);
+  const d0 = await ev(() => ({ h: RiseScene.alt(), drops: M.droplets, coat: M.coat }));
+  if (d0.drops !== 0 || d0.coat) throw new Error('불포화인데 물방울: ' + JSON.stringify(d0));
+  await ev(() => { M.ty = RiseScene.map.kmToY(1.5); });
+  await until(() => RiseScene.stopped, 6000);
+  const d1 = await ev(() => ({ h: RiseScene.alt(), drops: M.droplets }));
+  if (Math.abs(d1.h - 1.0) > 0.002 || d1.drops !== 1) throw new Error(JSON.stringify(d1));
+  const m = await meters();
+  if (!m.T.startsWith('10.0') || !m.Td.startsWith('10.0') || !m.rh.startsWith('100')) throw new Error(JSON.stringify(m));
+  await shot('07-condense');
+  await dialogs();
+  const t = await overlayText();
+  if (!t.includes('내가 표시한 높이: 1.2 km') || !t.includes('실제로 처음 같아진 높이: 1.0 km')) throw new Error('표시 vs 실제 비교 없음: ' + t.slice(0, 160));
+  await click('#obNext');
+});
+await step('구름이 시작되는 곳: 그래프에서 처음 만나는 점 — 터치 오차 보정(가까운 점으로)', async () => {
+  await page.waitForSelector('#overlay svg.bg');
+  await click('#overlay .pickList button[data-id="T05"]'); await click('#gpOk');
+  if (!(await overlayText()).includes('아직 두 값이 달라')) throw new Error('오답 근거 없음');
+  // (10℃, 1.0 km) 점에서 조금 벗어난 곳을 눌러도 그 점이 선택됨
+  const box = await ev(() => { const s = document.querySelector('#overlay svg.bg'), c = s.querySelector('circle.cand[data-id="meet"]'); const r = c.getBoundingClientRect(); return { x: r.x + r.width / 2 + 9, y: r.y + r.height / 2 - 8 }; });
+  await page.mouse.click(box.x, box.y); await wait(80); await shot('08-graphpick');
+  const info = await ev(() => document.querySelector('#overlay .pickInfo').textContent);
+  if (!info.includes('10℃ = 이슬점 10℃')) throw new Error('스냅/실제 수치 불일치: ' + info);
+  await click('#gpOk'); await click('#gpNext');
+  await dialogs();
+  await click('#mapNextBtn');
 });
 
-if (errors.length) {
-  console.log('\n===== JS 오류 =====');
-  errors.forEach(e => console.log(' -', e));
-}
-console.log(failed === 0 && errors.length === 0 ? '\n스모크 테스트 전체 통과 🎉' : `\n실패 ${failed}건 / JS 오류 ${errors.length}건`);
+await step('정상으로: 예상(10℃/km 그대로) → 바람길 이탈은 감점 없이 복귀 → 정상 2.0 km 정지', async () => {
+  await until(() => S.chapter === 3);
+  await dialogs();
+  await pickOpt(0);
+  await until(() => SlopeScene.playing);
+  const hearts0 = await ev(() => S.hearts);
+  await ev(() => { const p = SlopeScene.w2s(0.6, 1.8); M.held = true; M.tx = p.x; M.ty = p.y; });   // 바람길 위로 크게 벗어남
+  await wait(900);
+  const off = await ev(() => { const mw = SlopeScene.mWorld(); return Math.abs(mw.h - SlopeScene.bandCenter(mw.x)); });
+  if (off > 0.5) throw new Error('바람길로 복귀하지 않음 ' + off);
+  if ((await ev(() => S.hearts)) !== hearts0 || (await ev(() => document.getElementById('hearts').classList.contains('on')))) throw new Error('하트가 본편에 사용됨');
+  for (let x = 0.8; x <= 3.9; x += 0.25) {
+    await ev(x => { const p = SlopeScene.w2s(x, SlopeScene.bandCenter(x)); M.held = true; M.tx = p.x; M.ty = p.y; }, x);
+    await wait(260);
+    if (await ev(() => !SlopeScene.playing)) break;
+  }
+  await shot('09-slope');
+  await until(() => !SlopeScene.playing, 8000);
+  const m = await meters();
+  if (!m.alt.startsWith('2.00') || !m.T.startsWith('5.0') || !m.Td.startsWith('5.0')) throw new Error(JSON.stringify(m));
+  await click('#obNext');
+});
+await step('정상으로: 그래프 구간 선택(1~2 km) → 응결열 연결 → 예상 피드백(변화율 비교 안내)', async () => {
+  await click('#overlay .pickList button[data-id="s01"]'); await click('#gpOk');
+  if (!(await overlayText()).includes('20℃ → 10℃')) throw new Error('오답 근거 없음');
+  await click('#overlay .pickList button[data-id="s12"]'); await click('#gpOk'); await click('#gpNext');
+  await dialogs();
+  const t = await overlayText();
+  if (!t.includes('구름이 생기기 전과 같은 변화율을 예상했구나')) throw new Error(t.slice(0, 140));
+  await click('#pvEvi'); await page.waitForSelector('#overlay svg.bg'); await click('#evBack');
+  await click('#pvRev'); await click('#pvNext');
+  await click('#mapNextBtn');
+});
+
+await step('구름 속 관찰: 응결 → 강수 → 수분 비교, 판단(수분 감소), 막간 놀이는 선택(바로 본편 복귀)', async () => {
+  await until(() => S.chapter === 4);
+  await dialogs();
+  await pickOpt(1);
+  await click('#stNext'); await click('#stNext'); await wait(1500); await shot('10-cloud'); await click('#stNext');
+  await pickOpt(2);
+  if (!(await overlayText()).includes('물의 합은 그대로')) throw new Error('‘그대로’ 오답 근거 없음');
+  await pickOpt(0); await click('#jgNext');
+  await dialogs();
+  await page.waitForSelector('#pvNext'); await click('#pvNext');
+  await page.waitForSelector('#songYes');
+  await click('#songYes');
+  await until(() => scene === RainSong && document.getElementById('hearts').classList.contains('on'));
+  await wait(2500); await shot('11-rainsong');
+  await click('#songExit');
+  await until(() => scene === CloudScene && !document.getElementById('hearts').classList.contains('on'));
+  await click('#mapNextBtn');
+});
+
+await step('산 너머로: 예상(20℃) → 하강 중 1 km 자동 정지 → 15℃/7℃ 관찰', async () => {
+  await until(() => S.chapter === 5);
+  const droplets = await ev(() => M.droplets);
+  if (droplets) throw new Error('강수 후 하강하는 뭉게에 물방울이 그려짐');
+  await dialogs();
+  await pickOpt(0);
+  await until(() => DescentScene.playing);
+  await ev(() => { const p = DescentScene.w2s(1.6, 0.4); M.held = true; M.tx = p.x; M.ty = p.y; });   // 급하게 끌어도
+  await until(() => DescentScene.midDone, 10000);
+  const m = await meters();
+  if (!m.alt.startsWith('1.00') || !m.T.startsWith('15.0') || !m.Td.startsWith('7.0')) throw new Error(JSON.stringify(m));
+  await shot('12-descent-mid');
+  await click('#obNext');
+  await pickOpt(1);
+  if (!(await overlayText()).includes('구름 속을 오를 때')) throw new Error('오답 근거 없음');
+  await pickOpt(0); await click('#jgNext');
+  await dialogs();
+});
+await step('산 너머로: 손을 떼도 천천히 영서 평지에 착지(넉넉한 판정) → 25℃/9℃, 예상별 피드백', async () => {
+  await until(() => DescentScene.playing);
+  await ev(() => { M.held = false; });
+  await until(() => DescentScene.landed, 25000);
+  const m = await meters();
+  if (!m.alt.startsWith('0.00') || !m.T.startsWith('25.0') || !m.Td.startsWith('9.0') || !m.rh.startsWith('36')) throw new Error(JSON.stringify(m));
+  await click('#obNext');
+  const t = await overlayText();
+  if (!t.includes('출발과 같은 기온이 될 거라고 예상했구나')) throw new Error(t.slice(0, 140));
+  await click('#pvRev'); await click('#pvNext');
+  await dialogs();
+  await click('#mapNextBtn');
+});
+
+await step('관측소 보고: 빈칸(기온 +5, 이슬점 −3) — 틀리면 출발·도착 값으로 안내', async () => {
+  await until(() => S.chapter === 6);
+  await dialogs();
+  await page.waitForSelector('#rpOk');
+  for (let i = 0; i < 4; i++) await click('#aUp');
+  for (let i = 0; i < 3; i++) await click('#bUp');
+  await click('#rpOk'); await shot('13-report');
+  if (!(await overlayText()).includes('출발 20℃ → 도착 25℃')) throw new Error('보고 오답 안내 없음');
+  await click('#aUp'); await click('#rpOk');
+  await page.waitForSelector('#overlay svg.bg');
+});
+await step('관측소 보고: 근거 구간 선택(구름 속 상승) → 그림 Ⅲ-13 핵심 빈칸(상대 습도 오답 → 관측값 안내)', async () => {
+  await click('#overlay .pickList button[data-id="down"]'); await click('#gpOk');
+  if (!(await overlayText()).includes('덜 식은 구간')) throw new Error('오답 근거 없음');
+  await click('#overlay .pickList button[data-id="up2"]'); await click('#gpOk'); await click('#gpNext');
+  await page.waitForSelector('#overlay .blank');
+  await click('#overlay .blank[data-bi="3"]');
+  await click('#overlay .opts .btn[data-o="증가"]');
+  if (!(await overlayText()).includes('기온은 5℃에서 25℃로, 이슬점은 5℃에서 9℃로')) throw new Error('상대 습도 칸 근거 없음');
+  await shot('14-fig13');
+  const answers = ['불포화', '−5℃/km', '+10℃/km', '감소'];
+  for (let bi = 0; bi < 4; bi++) {
+    if (await ev(bi => !document.querySelector(`#overlay .blank[data-bi="${bi}"]`), bi)) continue;
+    await click(`#overlay .blank[data-bi="${bi}"]`);
+    await click(`#overlay .opts .btn[data-o="${answers[bi]}"]`);
+  }
+  await click('#f13Done');
+  await dialogs();
+  await page.waitForSelector('#cpLab');
+  await shot('15-checkpoint');
+  const t = await overlayText();
+  if (!t.includes('1부 정리 지점')) throw new Error('정리 지점 없음');
+});
+
+await step('다른 조건의 여행 1단계: 같은 산·다른 이슬점 — 예상 → 두 실험 → 비교 → 이유', async () => {
+  await click('#cpLab');
+  await until(() => S.chapter === 7);
+  await dialogs();
+  await pickOpt(0);
+  for (let k = 0; k < 2; k++) { await page.waitForSelector('#labGo'); await click('#labGo'); await until(() => LabScene.result && LabScene.u < 0, 8000); await wait(150); }
+  const t = await overlayText();
+  if (!t.includes('22.5℃') || !t.includes('27.5℃')) throw new Error('비교표 값 오류: ' + t.slice(0, 200));
+  await click('#obNext');
+  await pickOpt(0); await click('#jgNext');
+  await page.waitForSelector('#pvRev'); await click('#pvRev'); await click('#pvNext');
+  await dialogs();
+});
+await step('다른 조건의 여행 2단계: 산 0.8 / 1.0 / 2.5 km — 응결 고도에 못 미침과 정상에서 막 포화를 구별', async () => {
+  await pickOpt(1);
+  for (let k = 0; k < 3; k++) { await page.waitForSelector('#labGo'); await click('#labGo'); await until(() => LabScene.result && LabScene.u < 0, 8000); await wait(150); }
+  await shot('16-lab2');
+  const t = await overlayText();
+  for (const k of ['응결 고도에 못 미침', '정상에서 막 포화', '27.5℃']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  await click('#obNext');
+  await pickOpt(1);
+  if (!(await overlayText()).includes('도달하지 못한 건 산 0.8 km')) throw new Error('구별 안내 없음');
+  await pickOpt(0); await click('#jgNext');
+  await page.waitForSelector('#pvNext'); await click('#pvNext');
+  await dialogs();
+});
+await step('다른 조건의 여행 3단계: 목표 30℃ 만들기 (이슬점 16℃ · 산 2.5 km) → 이유 → 자유 실험 → 1부 결과', async () => {
+  await page.waitForSelector('#lTd');
+  await ev(() => { const a = document.getElementById('lTd'); a.value = 16; a.dispatchEvent(new Event('input')); const b = document.getElementById('lM'); b.value = 2.5; b.dispatchEvent(new Event('input')); });
+  for (let i = 0; i < 10; i++) await click('#gUp');
+  await click('#labGo');
+  await until(() => !!document.querySelector('#overlay .opts'), 8000);
+  await pickOpt(0); await click('#jgNext');
+  await page.waitForSelector('#labEnd');
+  await ev(() => { const a = document.getElementById('lTd'); a.value = 4; a.dispatchEvent(new Event('input')); const b = document.getElementById('lM'); b.value = 1.5; b.dispatchEvent(new Event('input')); });
+  // 자유 실험의 예상값은 20℃에서 시작 — 이슬점 4℃ · 산 1.5 km(구름 없음)에서 20℃로 예상
+  await click('#labGo'); await until(() => LabScene.result && LabScene.u < 0, 8000); await wait(150);
+  if ((await ev(() => S.rec.lab.goodConds.length)) < 2) throw new Error('서로 다른 조건의 예상 기록 안 됨: ' + JSON.stringify(await ev(() => S.rec.lab)));
+  const read = await ev(() => document.getElementById('labRead').textContent);
+  if (!read.includes('응결 고도에 도달하지 못해')) throw new Error(read);
+  await click('#labEnd');
+  await page.waitForSelector('#toP2');
+});
+await step('1부 결과: 처음 예상 · 관측값 · 고른 근거 · 생각 변화 · 다시 보기', async () => {
+  await shot('17-results1');
+  const t = await overlayText();
+  for (const k of ['1부 · 산을 건너는 뭉게 완료', '처음 예상', '관측한 값', '내가 고른 근거', '생각 변화', '관찰 뒤 생각을 고침', '근거를 보고 고침', '다시 보기']) if (!t.includes(k)) throw new Error('없음: ' + k);
+});
+
+/* ===================== 2부 ===================== */
+const liftAndRelease = async (predIdx) => {
+  await until(() => SkyScene.mode === 'lift', 8000);
+  await ev(() => document.querySelector('#moveBtns button[data-dy="-1"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+  await until(() => SkyScene.mode === 'hold', 15000);
+  await ev(() => document.querySelector('#moveBtns button[data-dy="-1"]').dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  const card = await overlayText(); await shot('18-p2-hold-' + (await ev(() => SkyScene.name + SkyScene.target)));
+  await click('#obNext');
+  await pickOpt(predIdx);
+  await click('#relBtn');
+  await wait(1500); await shot('19-p2-release-' + (await ev(() => SkyScene.name + SkyScene.target)));
+  await until(() => SkyScene.mode === 'done', 8000);
+  return card;
+};
+await step('2부 전환: 출발 조건(20℃·12℃)으로 돌아옴을 표시, 외부 작용과 놓은 뒤 운동 구별', async () => {
+  await click('#toP2');
+  await until(() => S.chapter === 8);
+  const txt = await ev(() => Dialog.lines.map(l => l.text).join(' '));
+  if (!txt.includes('출발할 때의 나(20℃ · 12℃)') || !txt.includes('외부 작용')) throw new Error('전환 안내 부족');
+  if ((await ev(() => Dialog.lines.map(l => l.text).join(' '))).includes('안정')) throw new Error('관찰 전에 안정도 이름 공개');
+  await dialogs();
+});
+await step('대기 A(4℃/km): 0.5 km 15℃ vs 18℃ → 놓으면 돌아옴(같은 높이 비교로 판정)', async () => {
+  const card = await liftAndRelease(0);
+  if (!card.includes('15℃') || !card.includes('18℃')) throw new Error(card);
+  const r = await ev(() => ({ out: SkyScene.outcome, h: SkyScene.h }));
+  if (r.out !== 'return' || r.h > 0.05) throw new Error(JSON.stringify(r));
+  await pickOpt(0); await click('#jgNext');
+  await page.waitForSelector('#pvRev'); await click('#pvRev'); await click('#pvNext');
+  await click('#noteNext');
+});
+await step('대기 C(12℃/km): 0.5 km 15℃ vs 14℃ → 계속 올라감', async () => {
+  await until(() => S.chapter === 9); await dialogs();
+  await liftAndRelease(0);
+  const r = await ev(() => ({ out: SkyScene.outcome, h: SkyScene.h }));
+  if (r.out !== 'rise' || r.h < 1) throw new Error(JSON.stringify(r));
+  await pickOpt(0); await click('#jgNext');
+  await page.waitForSelector('#pvNext'); await click('#pvNext');
+  await dialogs(); await click('#noteNext');
+});
+await step('대기 B(8℃/km): 1 km(응결, 10℃ < 12℃) 돌아옴 / 2 km(5℃ > 4℃) 계속 올라감', async () => {
+  await until(() => S.chapter === 10); await dialogs();
+  await liftAndRelease(2);
+  const r1 = await ev(() => ({ out: SkyScene.outcome, drops: riseState(20, 12, 1).saturated }));
+  if (r1.out !== 'return' || !r1.drops) throw new Error(JSON.stringify(r1));
+  await dialogs();
+  await liftAndRelease(0);
+  const r2 = await ev(() => ({ out: SkyScene.outcome }));
+  if (r2.out !== 'rise') throw new Error(JSON.stringify(r2));
+  const t = await ev(() => Dialog.lines.map(l => l.text).join(' '));
+  if (!t.includes('구름이 생겼을 때는 아직 주위보다 차가웠어')) throw new Error('비교 대사 없음');
+  await dialogs();
+});
+await step('대기 B: 그래프에서 스스로 오르기 시작하는 높이(약 1.67 km) — 상승 응결 고도와 구별', async () => {
+  await page.waitForSelector('#overlay svg.bg');
+  await click('#overlay .pickList button[data-id="lcl"]'); await click('#gpOk');
+  if (!(await overlayText()).includes('구름이 생기기 시작한 높이')) throw new Error('구별 안내 없음');
+  await click('#overlay .pickList button[data-id="lfc"]'); await click('#gpOk');
+  if (!(await overlayText()).includes('1.67')) throw new Error('LFC 1.67 표기 없음');
+  await shot('20-lfc');
+  await click('#gpNext');
+  await dialogs();
+  for (let i = 0; i < 2; i++) { await page.waitForSelector('#pvNext'); if (await ev(() => !!document.getElementById('pvRev'))) await click('#pvRev'); await click('#pvNext'); }
+  await click('#noteNext');
+});
+await step('이름 붙이기: 관찰 뒤 감률과 연결(오답 시 관찰 근거) → 층운형/적운형', async () => {
+  await until(() => S.chapter === 11); await dialogs();
+  await page.waitForSelector('#nmOk');
+  await click('#overlay [data-n="A"][data-i="2"]'); await click('#overlay [data-n="B"][data-i="1"]'); await click('#overlay [data-n="C"][data-i="0"]');
+  await click('#nmOk'); await shot('21-names');
+  if (!(await overlayText()).includes('습윤 단열 감률(5)보다 작아')) throw new Error('오답 근거 없음');
+  await click('#overlay [data-n="A"][data-i="0"]'); await click('#overlay [data-n="C"][data-i="2"]');
+  await click('#nmOk');
+  await dialogs();
+  await shot('22-clouds');
+  await pickOpt(1);
+  if (!(await overlayText()).includes('대기 A를 떠올려')) throw new Error('구름 오답 근거 없음');
+  await pickOpt(0); await click('#jgNext');
+  await dialogs();
+});
+await step('새로운 하늘(대기 D, 처음 보는 수치): 같은 높이 두 기온으로 판단 → 확인 실험 → 2부 결과', async () => {
+  await until(() => S.chapter === 12); await dialogs();
+  await page.waitForSelector('#fnOk');
+  const t = await overlayText();
+  if (!t.includes('16℃') || !t.includes('17℃') || !t.includes('11℃') || !t.includes('8℃')) throw new Error('대기 D 수치 오류');
+  await click('#overlay [data-k="0"][data-i="2"]'); await click('#overlay [data-k="1"][data-i="0"]'); await click('#fnOk');
+  await dialogs();
+  for (let k = 0; k < 2; k++) {
+    const n0 = await ev(() => SkyScene.nRel);
+    await click('#relBtn');
+    await page.waitForFunction(n => SkyScene.nRel > n, n0, { timeout: 9000 });
+  }
+  const top = await ev(() => ({ h: SkyScene.h, alt: document.querySelector('#mAlt .val').textContent }));
+  if (top.h > 3.2) throw new Error('표시 상한을 넘은 고도 ' + JSON.stringify(top));
+  const outs = await ev(() => SkyScene.outcome);
+  if (outs !== 'rise') throw new Error('2 km 확인 실험 결과 ' + outs);
+  await dialogs();
+  await page.waitForSelector('#resTitle');
+  await shot('23-results2');
+  const r = await overlayText();
+  if (!r.includes('2부 · 놓아주면 어디로 갈까? 완료') || !r.includes('대기 A')) throw new Error('2부 결과 표시 부족');
+});
+
+await step('2부 자유 실험(복습): 감률 5·10 경계 이름, 놓는 높이별 결과를 바로 확인', async () => {
+  await click('#toFree');
+  await page.waitForSelector('#fsG');
+  await ev(() => { const a = document.getElementById('fsG'); a.value = 5; a.dispatchEvent(new Event('input')); });
+  if (!(await ev(() => document.getElementById('simPanel').textContent)).includes('포화 공기에 대해 중립')) throw new Error('경계 5 표기 없음');
+  await ev(() => { const a = document.getElementById('fsG'); a.value = 12; a.dispatchEvent(new Event('input')); });
+  await click('#fsDn'); await click('#fsDn'); await click('#fsDn'); await click('#fsDn'); await click('#fsDn'); await click('#fsDn');  // 0.5 km
+  await click('#fsGo');
+  const msg = await ev(() => document.getElementById('fsMsg').textContent);
+  if (!msg.includes('0.5 km') || !msg.includes('계속 올라가요')) throw new Error(msg);
+  await click('#fsEnd');
+  await page.waitForSelector('#resTitle');
+});
+
+/* ===================== 보조 기능 · 상태 유지 ===================== */
+await step('?ch=5: 앞 장은 ‘앞선 여정 요약’(직접 관측과 구별) + 미니 그래프 회색 요약선', async () => {
+  const u = new URL(URL0); u.search = '?ch=5';
+  await page.goto(u.href); await wait(500);
+  await click('#jumpBtn');
+  await until(() => S.chapter === 5);
+  const r = await ev(() => ({ sum: S.rec.obs.filter(o => o.summary).length, obs: S.rec.obs.filter(o => !o.summary).length, d: document.getElementById('mgSumT').getAttribute('d'), up: document.getElementById('mgUpT').getAttribute('d') }));
+  if (r.sum < 5 || r.obs !== 0 || !r.d || r.up) throw new Error(JSON.stringify(r));
+});
+await step('챕터 고르기 · 홈 확인 창(기록 유지) · 📒 기록에서 대사 다시 읽기', async () => {
+  await dialogs();
+  await page.waitForSelector('#overlay .opts');
+  await pickOpt(2);
+  await until(() => DescentScene.playing);
+  await page.click('#logBtn');
+  await page.waitForSelector('#logClose');
+  const t = await overlayText();
+  if (!t.includes('앞선 여정 요약') || !t.includes('정상(2 km)이야')) throw new Error('기록/대사 다시 보기 부족');
+  await click('#logClose');
+  await page.click('#progress');
+  await page.waitForSelector('#homeYesBtn');
+  await click('#homeYesBtn');
+  await page.waitForSelector('#selBtn');
+  await click('#selBtn');
+  const sel = await overlayText();
+  if (!sel.includes('대기 B · 두 높이에서') || !sel.includes('관측소 보고')) throw new Error('챕터 목록 부족');
+  await click('#overlay [data-ch="2"]');
+  await until(() => S.chapter === 2);
+});
+await step('화면 크기·세로 회전: 관찰 위치 유지, 세로 화면에서는 시간 정지', async () => {
+  await dialogs();
+  await page.waitForSelector('#mkOk'); await click('#mkOk');
+  await until(() => RiseScene.playing);
+  await ev(() => { M.held = true; M.ty = RiseScene.map.kmToY(0.8); });
+  await until(() => RiseScene.alt() > 0.78, 6000);
+  await ev(() => { M.held = false; M.ty = M.y; });
+  await wait(300);
+  const h0 = await ev(() => RiseScene.alt());
+  await page.setViewportSize({ width: 1024, height: 768 }); await wait(400);
+  const h1 = await ev(() => RiseScene.alt());
+  if (Math.abs(h1 - h0) > 0.03) throw new Error(`고도 ${h0} → ${h1}`);
+  await page.setViewportSize({ width: 800, height: 1280 }); await wait(200);
+  const t0 = await ev(() => S.time); await wait(600); const t1 = await ev(() => S.time);
+  await page.setViewportSize({ width: 1280, height: 800 }); await wait(300);
+  if (t1 - t0 > 0.05) throw new Error('세로 화면에서 시간이 흐름');
+});
+await step('2부 표시 상한 ≠ 판정: 화면 위로 나가도 판정은 같은 높이 두 기온 비교', async () => {
+  await ev(() => { startChapter(9); });
+  await dialogs();
+  await ev(() => { SkyScene.holdAt(0.5); SkyScene.release(); });
+  const out = await ev(() => SkyScene.outcome);
+  await until(() => SkyScene.mode === 'done', 8000);
+  const r = await ev(() => ({ out: SkyScene.outcome, maxH: SkyScene.maxH }));
+  if (out !== 'rise' || r.out !== 'rise') throw new Error(JSON.stringify(r));
+});
+
+if (errors.length) { console.log('\n===== JS 오류 ====='); errors.forEach(e => console.log(' -', e)); }
+console.log(failed === 0 && errors.length === 0 ? '\n본편 전체 진행 테스트 통과 🎉' : `\n실패 ${failed}건 / JS 오류 ${errors.length}건`);
 await browser.close();
 process.exit(failed === 0 && errors.length === 0 ? 0 : 1);
