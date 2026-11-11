@@ -151,7 +151,7 @@ await step('속 들여다보기: 알갱이 수는 그대로, 간격만 · 공기
 await step('1장 응결: 예상(기온 = 이슬점 직전) → 서툰 조작에도 진행 → 물방울은 포화 순간에 · 피드백은 관찰과 연결', async () => {
   await dialogs();
   await page.waitForSelector('#overlay .opts');
-  if (!(await overlayText()).includes('기온과 이슬점이 같아지는 높이')) throw new Error('응결 직전 예상 질문 없음');
+  { const q = await overlayText(); for (const k of ['지표에서 기온은 20℃, 이슬점은 12℃', '구름이 생기기 시작하는 높이', '1 km에 10℃']) if (!q.includes(k)) throw new Error('응결 직전 예상 질문(지표 값) 없음: ' + k); }
   await pickOpt(0);   // 0.75 km (틀린 예상도 그대로 진행)
   await page.waitForSelector('#holdBtn');
   // 서툰 조작: 톡톡 누르기(키보드 Enter)만으로도 진행
