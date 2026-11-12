@@ -83,7 +83,8 @@ const notCovered = async () => {
 await step('처음 화면: 처음 시작 · 이어 하기(저장 없으면 꺼짐) · 장면 선택 · 교사용 보기 · 저장 안내 · 푸터', async () => {
   await shot('00-title');
   const t = await overlayText();
-  for (const k of ['처음 시작', '이어 하기', '장면 선택', '교사용 보기', '이 기기의 브라우저에 진행 상황이 저장됩니다.', '연경쌤의 지구과학 실험실 둘러보기']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  for (const k of ['처음 시작', '이어 하기', '장면 선택', '교사용 보기', '연경쌤의 지구과학 실험실 둘러보기']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  if (t.includes('개인정보는 받지 않아요')) throw new Error('처음 화면에 저장 안내 문구가 남아 있음');
   const ic = await ev(() => ({ svg: !!document.querySelector('link[rel="icon"][type="image/svg+xml"]'), apple: !!document.querySelector('link[rel="apple-touch-icon"]') }));
   if (!ic.svg || !ic.apple) throw new Error('웹앱 아이콘 없음 ' + JSON.stringify(ic));
   if (!(await ev(() => document.getElementById('contBtn').disabled))) throw new Error('저장이 없는데 이어 하기가 켜져 있음');
@@ -195,6 +196,7 @@ await step('대화 중에도 소리 버튼이 실제로 눌림 (화면 좌표 �
 });
 await step('설정: 대사 바로 표시 · 소리 끄기 (저장됨)', async () => {
   await click('#setBtn');
+  if (!(await ev(() => document.getElementById('sheet').textContent.includes('이 기기의 브라우저에 진행 상황이 저장됩니다.')))) throw new Error('설정에 저장 안내 없음');
   await click('#sheet [data-k="typing"][data-v="off"]');
   await click('#sheet [data-k="sound"][data-v="false"]');
   const r = await ev(() => ({ t: S.set.typing, s: S.set.sound, m: AudioSys.muted, saved: JSON.parse(localStorage.getItem(SAVE_KEY)).set }));

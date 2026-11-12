@@ -152,7 +152,6 @@
   .chList button small { color:var(--sub); }
   .startBtns { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:520px; margin:10px auto 0; }
   .startBtns .btn { margin:0; }
-  .saveNote { font-size:14px !important; margin-top:10px; }
   .resT { width:100%; border-collapse:collapse; font-size:15px; text-align:left; margin-top:6px; }
   .resT th, .resT td { border-bottom:1px solid #F0E3D4; padding:6px 8px; vertical-align:top; color:var(--ink); }
   .resT th { color:var(--sub); font-weight:600; background:var(--soft); }
@@ -297,8 +296,7 @@
   .panel.titleP .startBtns .btn { font-family:var(--f-deco); font-weight:normal; font-size:clamp(20px,3vh,24px); letter-spacing:.5px; border-radius:18px; }
   .panel.titleP .startBtns .btn small { font-family:var(--f-soft); font-weight:700; letter-spacing:0; }
   .panel.titleP .row2 .btn { font-family:var(--f-deco); font-weight:normal; }
-  .panel.titleP .saveNote, .panel.titleP footer { font-family:var(--f-soft); }
-  .panel.titleP .saveNote { font-size:15px !important; color:#8C7466 !important; }
+  .panel.titleP footer { font-family:var(--f-soft); margin-top:16px; }
   .titleFace { width:min(176px,24vh); margin:0 auto; }
   .titleFace svg { display:block; width:100%; height:auto; overflow:visible; }
   .titleFace .mg { animation:floaty 3.2s ease-in-out infinite; }
@@ -2871,7 +2869,6 @@ function showTitle() {
       <button class="btn sub" id="tchBtn" data-key="4">교사용 보기</button>
     </div>
     ${extra ? `<div class="row2">${extra}</div>` : ''}
-    <p class="saveNote">이 기기의 브라우저에 진행 상황이 저장됩니다.<br><small>개인정보는 받지 않아요 · 소리 없이도 진행할 수 있어요 · 오른쪽 위 ⚙️에서 설정</small></p>
     ${FOOTER_HTML}`, 'titleP');
   onClick('newBtn', () => {
     if (!hasSave()) { AudioSys.sClear(); Trail.reset(); startChapter(0); return; }
@@ -2922,7 +2919,8 @@ function showTeacher() {
       <h3 class="secT">핵심 설명 다시 보기</h3>
       <div class="concepts">${CONCEPTS.map(([t, d], i) => `<button class="concept${open === i ? ' on' : ''}" data-c="${i}"><b>${t}</b>${open === i ? `<span>${d}</span>` : ''}</button>`).join('')}</div>
       <p class="note">주소 옵션: <code>?ch=N</code> (1~12 — 1~7 = 1부, 8~12 = 2부) 처음 화면에 ‘N장부터 시작’ · <code>?part=2</code> 2부부터 · <code>?debug=1</code> 장면 상태 표시.
-      중간 장면부터 열면 앞 기록은 ‘앞선 여정 요약’으로 구별돼요. 서버·계정 없이 이 기기에서만 동작해요.</p>
+      중간 장면부터 열면 앞 기록은 ‘앞선 여정 요약’으로 구별돼요. 서버·계정 없이 이 기기에서만 동작해요.<br>
+      진행 상황(진행 장면 · 관찰 기록 · 예상 · 설정)은 이 기기의 브라우저에만 저장돼요. 개인정보는 받지 않아요.</p>
       <div class="row2"><button class="btn sub" id="tBack" data-key="1">◀ 처음 화면</button></div>`, 'wide');
     document.querySelectorAll('#overlay [data-ch]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); AudioSys.sClear(); startFrom(Number(b.dataset.ch)); }));
     document.querySelectorAll('#overlay [data-c]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); open = open === Number(b.dataset.c) ? -1 : Number(b.dataset.c); render(); }));
