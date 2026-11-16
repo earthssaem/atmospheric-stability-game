@@ -170,8 +170,9 @@ await step('1장 응결: 예상(기온 = 이슬점 직전) → 서툰 조작에�
   await wait(200); await shot('04-lcl');
   await notCovered();
   const t = await dialogs();
-  for (const k of ['잠깐, 내 안에 작은 물방울이 보여!', '이 물방울들이 모여 구름으로 보이는 거구나.', '실제로는 1.0 km']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  for (const k of ['잠깐, 내 안에 작은 물방울이 보여!', '여기서부터 구름이 생기기 시작해', '나는 여전히 공기 덩어리야', '실제로는 1.0 km']) if (!t.includes(k)) throw new Error('없음: ' + k);
   if (/구름이 됐|구름이 되었/.test(t)) throw new Error('뭉게가 구름이 되었다고 말함');
+  if (/구름이 된 게 아니|아직 구름이 아니/.test(t)) throw new Error('상승 응결 고도에서 구름이 아니라고 들리는 대사가 있음');
   await click('#nextBtn');
 });
 
