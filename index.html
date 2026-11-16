@@ -191,10 +191,10 @@
     background:var(--card); border:var(--bw) solid var(--line); border-radius:var(--r); padding:10px 16px; width:min(540px, calc(100% - 24px));
     box-shadow:var(--shadow); max-height:calc(100% - 140px); overflow:auto; }
   #labPanel.on { display:block; }
-  #labPanel .row .row { display:flex; align-items:center; gap:8px; margin:6px 0; flex-wrap:wrap; font-size:16px; }
-  #labPanel label label { font-size:15px; color:var(--sub); min-width:78px; }
-  #labPanel input[type=range] input[type=range] { flex:1; min-width:120px; accent-color:#D98F5C; height:32px; }
-  #labPanel .row b .row b { color:var(--ink); }
+  #labPanel .row { display:flex; align-items:center; gap:8px; margin:6px 0; flex-wrap:wrap; font-size:16px; }
+  #labPanel label { font-size:15px; color:var(--sub); min-width:78px; }
+  #labPanel input[type=range] { flex:1; min-width:120px; accent-color:#D98F5C; height:32px; }
+  #labPanel .row b { color:var(--ink); }
 
   /* ============ 높이–온도 그래프 (펼쳐 보기) ============ */
   #miniGraph { position:absolute; right:12px; bottom:12px; z-index:48; pointer-events:none; width:min(270px, 30vw); padding:8px 8px 6px;
@@ -329,6 +329,9 @@
   #labPanel .btn { margin:0 6px 0 0; padding:8px 16px; min-height:44px; font-size:17px; }
   .labTbl { overflow:auto; max-width:100%; }
   .labTbl .cmpTbl { font-size:14px; }
+  .labTbl .cmpTbl th, .labTbl .cmpTbl td { word-break:keep-all; }   /* '이슬 / 점'처럼 낱말 중간에서 끊지 않음 */
+  .labTbl .cmpTbl th small { display:block; font-weight:500; line-height:1.3; }
+  .labTbl .ln { display:none; }   /* 좁은 화면용 짧은 칸 제목 */
   .seg .warn { background:#FBE3D8; border-color:#E8A88A; }
   code { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.92em; background:var(--soft); padding:0 4px; border-radius:6px; }
   @media (max-width: 720px) {
@@ -358,6 +361,12 @@
     #toast { top:184px; max-width:calc(100% - 24px); font-size:15px; }
     #miniGraph { top:138px; }
     #dFace { width:48px; height:48px; }
+    /* 다른 조건의 여행 비교표: 짧은 칸 제목 · 작은 글자와 여백으로 6칸이 한 화면에 */
+    #labPanel { padding:10px 12px; }
+    .labTbl .lw { display:none; } .labTbl .ln { display:inline; }
+    .labTbl .cmpTbl { font-size:13px; width:100%; }
+    .labTbl .cmpTbl th, .labTbl .cmpTbl td { padding:4px 3px; }
+    .labTbl .cmpTbl th small { font-size:10.5px; }
     .bg, .bgSide { width:100%; }
     #labPanel { max-height:46%; }
   }
@@ -2033,11 +2042,12 @@ const LabScene = {
 function labPanel(html) { const p = $('labPanel'); p.innerHTML = html; p.classList.add('on'); }
 function labRow(r) {
   const f = foehnTrip(SCENARIO.T0, r.Td, r.M), satLen = Math.max(0, r.M - f.H), eq = Math.abs(r.M - f.H) < 1e-6;
-  const note = f.cloud ? `${kf(satLen)} km` : eq ? '0 km (정상에서 막 포화)' : '0 km (응결 고도에 못 미침)';
-  return `<tr><td>${r.Td}℃</td><td>${kf(r.M)} km</td><td>${Math.round(f.H * 1000)} m<br><small>(${kf(f.H)} km)</small></td><td>${note}</td><td><b>${nf(f.arrT)}℃</b></td><td>${f.dT > 0 ? '+' : ''}${nf(f.dT)}℃</td></tr>`;
+  const note = f.cloud ? `${kf(satLen)}&nbsp;km` : eq ? '0&nbsp;km<br><small>(정상에서 막 포화)</small>' : '0&nbsp;km<br><small>(응결 고도에 못 미침)</small>';
+  return `<tr><td>${r.Td}℃</td><td>${kf(r.M)}&nbsp;km</td><td>${Math.round(f.H * 1000)}&nbsp;m<br><small>(${kf(f.H)}&nbsp;km)</small></td><td>${note}</td><td><b>${nf(f.arrT)}℃</b></td><td>${f.dT > 0 ? '+' : ''}${nf(f.dT)}℃</td></tr>`;
 }
 function labTable(rows) {
-  return `<table class="cmpTbl"><tr><th>출발 이슬점</th><th>산 높이</th><th>상승 응결 고도<br><small>125 ×<br>(20 − 이슬점)</small></th><th>포화 상태로 오른 구간</th><th>도착 기온</th><th>출발과의 차<br><small>= 5 × 포화 구간</small></th></tr>${rows.join('')}</table>`;
+  const th = (full, short, sub = '') => `<th><span class="lw">${full}</span><span class="ln">${short}</span>${sub ? `<small>${sub}</small>` : ''}</th>`;
+  return `<table class="cmpTbl"><tr>${th('출발 이슬점', '이슬점')}${th('산 높이', '산 높이')}${th('상승 응결 고도', '응결 고도', '125 × (20&nbsp;−&nbsp;이슬점)')}${th('포화 상태로 오른 구간', '포화 구간')}${th('도착 기온', '도착 기온')}${th('출발과의&nbsp;차', '출발보다', '= 5 × 포화&nbsp;구간')}</tr>${rows.join('')}</table>`;
 }
 function labFree() {
   return guard(new Promise(res => {
