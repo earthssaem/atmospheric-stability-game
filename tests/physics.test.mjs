@@ -7,7 +7,7 @@ const m = html.match(/\/\/ ==PHYSICS-START==([\s\S]*?)\/\/ ==PHYSICS-END==/);
 if (!m) { console.error('PHYSICS 블록을 찾을 수 없습니다'); process.exit(1); }
 
 const api = new Function(
-  m[1] + '\nreturn { RATE, SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints, pressureAt, volumeRatio, condensedFrac };'
+  m[1] + '\nreturn { RATE, SCENARIO, lclHeight, riseState, descendFrom, relHumidity, foehnTrip, trailUpPoints, trailDownPoints, pressureAt, volumeRatio, condensedFrac };'
 )();
 
 let fails = 0;
@@ -17,7 +17,7 @@ function eq(name, got, want, tol = 1e-9) {
   if (!ok) fails++;
 }
 
-const { SCENARIO, lclHeight, riseState, descendFrom, stability, envTemp, lfcHeight, relHumidity, foehnTrip, trailUpPoints, trailDownPoints, pressureAt, volumeRatio, condensedFrac } = api;
+const { SCENARIO, lclHeight, riseState, descendFrom, relHumidity, foehnTrip, trailUpPoints, trailDownPoints, pressureAt, volumeRatio, condensedFrac } = api;
 function eqPts(name, got, want) {
   const ok = got.length === want.length &&
     got.every((p, i) => Math.abs(p[0] - want[i][0]) < 1e-9 && Math.abs(p[1] - want[i][1]) < 1e-9);
@@ -54,16 +54,6 @@ eq('하강 중 불포화', g.saturated, false);
 // --- 중간 지점 하강 검증: 1.0 km에서 15℃ ---
 eq('하강 1.0 km 기온 15℃', descendFrom(5, 5, 2.0, 1.0).T, 15);
 
-// --- 안정도: γ<5 절대 안정 / γ>10 절대 불안정 / 5~10 조건부 ---
-eq('γ=4 → 절대 안정', stability(4), 'stable');
-eq('γ=5 → 조건부 불안정', stability(5), 'conditional');
-eq('γ=8 → 조건부 불안정', stability(8), 'conditional');
-eq('γ=10 → 조건부 불안정', stability(10), 'conditional');
-eq('γ=12 → 절대 불안정', stability(12), 'unstable');
-
-// --- 환경 기온 ---
-eq('γ=8, 1.5 km 환경 기온 8℃', envTemp(20, 8, 1.5), 8);
-
 // --- 발자국 그래프 경로 (v2) ---
 // maxUpAlt=1.5: 기온선 (20,0)→(10,1.0)→(7.5,1.5)로 꺾임, 이슬점선은 (12,0)→(10,1.0) 후 기온선과 합체
 const up15 = trailUpPoints(20, 12, 1.5);
@@ -78,22 +68,6 @@ const dn0 = trailDownPoints(5, 5, 2.0, 0);
 eqPts('하강 발자국(→0km) 기온선', dn0.T, [[5, 2], [25, 0]]);
 eqPts('하강 발자국(→0km) 이슬점선', dn0.Td, [[5, 2], [9, 0]]);
 eqPts('하강 발자국(→0.8km) 기온선', trailDownPoints(5, 5, 2.0, 0.8).T, [[5, 2], [17, 0.8]]);
-
-// --- 7장 조건부 불안정 시나리오 sanity: γ=8일 때 공기 덩어리가 주위보다 따뜻해지는 고도 존재 ---
-const cross = riseState(20, 12, 2.0).T > envTemp(20, 8, 2.0);
-eq('γ=8, 2.0 km에서 덩어리(5℃) > 주위(4℃) → 상승 지속', cross, true);
-
-// --- 자유 대류 고도(LFC): 응결 고도 위에서 5H/(γ−5) — 7장 도움말의 'N km 위까지 끌어올려 보자' 값 ---
-eq('LFC γ=8 (H=1) = 5/3 ≈ 1.67 km', lfcHeight(20, 12, 8), 5 / 3);
-eq('LFC γ=10 = 응결 고도 1.0 km', lfcHeight(20, 12, 10), 1.0);
-eq('LFC γ=6 = 5.0 km (2 km 안에선 불가)', lfcHeight(20, 12, 6), 5.0);
-eq('LFC γ=12 (절대 불안정) = 0 (지표부터)', lfcHeight(20, 12, 12), 0);
-eq('LFC γ=4 (절대 안정) = 없음', lfcHeight(20, 12, 4), null);
-eq('LFC γ=5 (경계) = 없음', lfcHeight(20, 12, 5), null);
-// LFC 바로 위에서는 덩어리가 주위보다 따뜻하고, 바로 아래에서는 차가움
-const L8 = lfcHeight(20, 12, 8);
-eq('γ=8: LFC+0.01 km에서 덩어리 > 주위', riseState(20, 12, L8 + 0.01).T > envTemp(20, 8, L8 + 0.01), true);
-eq('γ=8: LFC−0.01 km에서 덩어리 < 주위', riseState(20, 12, L8 - 0.01).T < envTemp(20, 8, L8 - 0.01), true);
 
 // --- 상대 습도 (그림 Ⅲ-13: 오를 때 증가 → 구름 속 100% 일정 → 내려올 때 감소) ---
 eq('상대 습도: 출발 20℃/12℃ ≈ 60%', relHumidity(20, 12), 60.0, 0.5);

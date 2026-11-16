@@ -1,4 +1,4 @@
-// 본편 전체 진행 테스트 (headless Chromium) — 1부·2부를 실제로 끝까지 진행하며
+// 본편 전체 진행 테스트 (headless Chromium) — 여행(0~7장)을 실제로 끝까지 진행하며
 // 이야기 흐름(짧은 조작 → 변화 → 반응 → 설명), 결정적인 순간의 예상과 막지 않는 피드백,
 // 뭉게 크기·물방울·관찰값이 같은 상태에서 나오는지, 저장·이어 하기, 설정, 관찰 기록 창을 확인
 // 실행: npm run test:e2e   (사전: npm install — playwright 설치)
@@ -93,7 +93,8 @@ await step('처음 화면: 처음 시작 · 이어 하기(저장 없으면 꺼�
 await step('교사용 보기: 장면 바로 열기 · 핵심 설명 다시 보기 · 주소 옵션 안내', async () => {
   await click('#tchBtn');
   const t = await overlayText();
-  for (const k of ['장면 바로 열기', '핵심 설명 다시 보기', '?ch=N', '?part=2', '?debug=1']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  for (const k of ['장면 바로 열기', '핵심 설명 다시 보기', '?ch=N', '?debug=1']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  if (t.includes('2부') || t.includes('?part=2') || t.includes('대기 안정도')) throw new Error('교사용 보기에 없어진 2부 내용이 남아 있음');
   await click('#overlay [data-c="1"]');
   if (!(await overlayText()).includes('(20 − 12)/8')) throw new Error('핵심 설명이 펼쳐지지 않음');
   await click('#tBack');
@@ -313,7 +314,7 @@ await step('5장 비교: 출발과 도착을 그래프와 함께 나란히 → �
   await click('#nextBtn');
 });
 
-await step('6장 관측소 보고: 그림 Ⅲ-13 빈칸은 선택 (채우지 않아도 계속) → 1부 정리', async () => {
+await step('6장 관측소 보고: 그림 Ⅲ-13 빈칸은 선택 (채우지 않아도 계속) → 여행 정리 → 학습 기록', async () => {
   await dialogs();
   await page.waitForSelector('#overlay .f13');
   if (!(await overlayText()).includes('내 관찰 기록')) throw new Error('빈칸 옆 근거 관찰값 없음');
@@ -325,97 +326,16 @@ await step('6장 관측소 보고: 그림 Ⅲ-13 빈칸은 선택 (채우지 않
   if (!(await overlayText()).includes('맞아!')) throw new Error('빈칸 피드백 없음');
   await shot('10-f13');
   await click('#f13Done');
-  await page.waitForSelector('#cpP2');
-  await click('#cpP2');
-});
-
-/* ===================== 2부 ===================== */
-await step('8장 대기 A: 새 출발 조건 안내 → 손으로 올리기 → 같은 높이 비교 → 놓기 전 예상 → 돌아옴 → 다시 해 보기', async () => {
-  const t0 = await dialogs();
-  if (!t0.includes('출발할 때의 나(20℃ · 12℃)')) throw new Error('새 출발 조건 안내 없음');
-  if (!(await ev(() => !document.getElementById('mEnv').classList.contains('off') && document.getElementById('mRH').classList.contains('off')))) throw new Error('2부 관찰값(주위 기온) 전환 안 됨');
-  await holdUntilStop();
-  await dialogs();
-  await page.waitForSelector('#overlay .opts');
-  const q = await overlayText();
-  if (!q.includes('뭉게 15℃') || !q.includes('주위 18℃')) throw new Error('같은 높이 두 기온이 질문에 없음');
-  await pickOpt(0);   // 올라간다 (틀린 예상)
-  await shot('11-A-before');
-  await click('#relBtn');
-  await wait(700); await shot('12-A-release');
-  await until(() => S.dialogActive, 15000);
-  const t = await dialogs();
-  for (const k of ['방금 출발했는데 벌써 돌아왔네.', '주위보다 차가운 공기는 밀도가 커서']) if (!t.includes(k)) throw new Error('없음: ' + k);
-  if (/팽창해서 (올라|뜨)/.test(t)) throw new Error('팽창 때문에 오른다고 설명함');
-  if ((await ev(() => S.rec.p2.A.out)) !== 'return') throw new Error('대기 A 결과');
-  await click('#again0');
-  await holdUntilStop();
-  await click('#relBtn');
-  await until(() => document.getElementById('nextBtn'), 15000);
-  await click('#nextBtn');
-});
-await step('9장 대기 C: 같은 0.5 km인데 계속 올라감 (화면 위 도달은 판정에 쓰지 않음)', async () => {
-  await dialogs();
-  await holdUntilStop();
-  await dialogs();
-  await pickOpt(0);
-  await click('#relBtn');
-  await until(() => S.dialogActive, 15000);
-  const t = await dialogs();
-  if (!t.includes('어, 손을 놓았는데도 계속 올라가!')) throw new Error('상승 반응 없음');
-  if ((await ev(() => S.rec.p2.C.out)) !== 'rise') throw new Error('대기 C 결과');
-  await click('#nextBtn');
-});
-await step('10장 대기 B: 1 km 돌아옴 · 2 km 올라감 → 두 기온 그래프로 자유 대류 고도', async () => {
-  await dialogs();
-  await holdUntilStop(); await dialogs(); await pickOpt(2); await click('#relBtn');
-  await until(() => S.dialogActive, 15000); await dialogs();
-  await holdUntilStop(); await dialogs(); await pickOpt(0); await click('#relBtn');
-  await until(() => S.dialogActive, 15000); await dialogs();
-  await page.waitForSelector('#agNext');
-  await shot('13-B-graph');
-  await click('#agNext');
-  const t = await dialogs();
-  if (!t.includes('자유 대류 고도')) throw new Error('자유 대류 고도 설명 없음');
-  const r = await ev(() => [S.rec.p2.B1.out, S.rec.p2.B2.out]);
-  if (r[0] !== 'return' || r[1] !== 'rise') throw new Error('대기 B 결과 ' + r);
-  await click('#nextBtn');
-});
-await step('11장 이름 붙이기와 구름: 관찰 뒤 이름 (판정 질문 없음) → 층운형·적운형', async () => {
-  await dialogs();
-  await page.waitForSelector('#nmNext');
-  const t = await overlayText();
-  for (const k of ['절대 안정', '조건부 불안정', '절대 불안정']) if (!t.includes(k)) throw new Error('없음: ' + k);
-  await click('#nmNext');
-  const t2 = await dialogs();
-  for (const k of ['층운형', '적운형']) if (!t2.includes(k)) throw new Error('없음: ' + k);
-  await shot('14-clouds');
-  await click('#nextBtn');
-});
-await step('12장 대기 D: 새 조건 안내 → 1 km 돌아옴 · 2 km 올라감 → 학습 기록', async () => {
-  const t0 = await dialogs();
-  if (!t0.includes('26℃')) throw new Error('새 출발 조건 안내 없음');
-  await holdUntilStop(); await dialogs(); await pickOpt(2); await click('#relBtn');
-  await until(() => S.dialogActive, 15000); await dialogs();
-  await holdUntilStop(); await dialogs(); await pickOpt(0); await click('#relBtn');
-  await until(() => S.dialogActive, 15000); await dialogs();
-  const r = await ev(() => [S.rec.p2.D1.out, S.rec.p2.D2.out]);
-  if (r[0] !== 'return' || r[1] !== 'rise') throw new Error('대기 D 결과 ' + r);
-  await click('#nextBtn');
+  await page.waitForSelector('#cpRes');
+  if (await page.$('#cpP2')) throw new Error('여행 정리에 2부 버튼이 남아 있음');
+  await click('#cpRes');
   await page.waitForSelector('#overlay .resT');
   const t = await overlayText();
-  for (const k of ['학습 기록', '처음 예상', '관찰한 값']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  for (const k of ['학습 기록', '처음 예상', '관찰한 값', '여행 완료']) if (!t.includes(k)) throw new Error('없음: ' + k);
+  if (t.includes('2부')) throw new Error('학습 기록에 2부가 남아 있음');
   await shot('15-results');
 });
 
-await step('2부 자유 실험 (선택): 감률·놓는 높이를 바꿔 바로 확인', async () => {
-  await click('#toFree');
-  await click('#fsUp');
-  await click('#fsGo');
-  if (!(await ev(() => document.getElementById('fsMsg').textContent)).includes('km: 뭉게')) throw new Error('자유 실험 결과 없음');
-  await click('#fsEnd');
-  await page.waitForSelector('#overlay .resT');
-});
 await step('다른 조건의 여행 (선택, 목표 과제 없음): 조건 바꿔 보내기 → 비교표', async () => {
   await ev(() => startFrom(7));
   await dialogs();
@@ -433,6 +353,7 @@ await step('장면 선택으로 중간부터: 앞 장 기록은 ‘앞선 여정
   await ev(() => { localStorage.clear(); S.rec = newRecord(); Trail.reset(); S.started = false; });
   await click('#resTitle');
   await click('#selBtn');
+  { const t = await overlayText(); if (t.includes('2부') || (await page.$('#p2Btn')) || (await page.$('#overlay [data-ch="8"]'))) throw new Error('장면 선택에 2부가 남아 있음'); }
   await click('#overlay [data-ch="4"]');
   const r = await ev(() => ({ ch: S.chapter, sum: S.rec.obs.filter(o => o.summary).map(o => o.id), obs: S.rec.obs.filter(o => !o.summary).length, sumUp: Trail.sumUp }));
   if (r.ch !== 4 || r.obs !== 0 || !r.sum.includes('top') || r.sumUp !== 2) throw new Error(JSON.stringify(r));
