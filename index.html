@@ -471,8 +471,9 @@ const SCENARIO = {
   Td0: 12,   // 출발 이슬점 ℃
   TOP: 2.0,  // 태백산맥 높이 km
 };
-// 상승 응결 고도 H(km) = ⅛(T - Td)
-function lclHeight(T, Td) { return (T - Td) / 8; }
+// 상승 응결 고도 H(m) = 125 × (T − Td)  (기온과 이슬점의 차이가 1 km에 8℃, 곧 125 m에 1℃씩 줄어듦)
+// 화면의 높이 단위가 km라서 km로 돌려줌
+function lclHeight(T, Td) { return 125 * (T - Td) / 1000; }
 // 지표 (T0, Td0)의 공기가 h(km)까지 '상승'했을 때의 상태
 function riseState(T0, Td0, h) {
   const H = lclHeight(T0, Td0);
@@ -1734,7 +1735,7 @@ const P1 = {
   q: '출발할 때 지표에서 기온은 <b>20℃</b>, 이슬점은 <b>12℃</b>였어.<br>기온과 이슬점이 같아져 구름이 생기기 시작하는 높이는 몇 km일까?', short: '구름이 생기기 시작하는 높이 (지표 20℃ · 12℃)',
   hint: '올라갈 때 기온은 1 km에 10℃, 이슬점은 1 km에 2℃씩 내려가. 두 값의 차이는 1 km에 몇 ℃씩 줄어들까?',
   opts: ['0.75 km', '1.0 km', '1.5 km', '같아지지 않는다'], ans: 1, real: '1.0 km (기온 = 이슬점 = 10℃)',
-  okFb: '지표에서 두 값의 차이 8℃가 1 km에 8℃(10 − 2)씩 줄어 1 km에서 0이 됐지. 그래서 (20 − 12) / 8 = 1 km야.',
+  okFb: '지표에서 두 값의 차이 8℃가 1 km에 8℃(10 − 2)씩, 곧 125 m에 1℃씩 줄어 1 km에서 0이 됐지. 그래서 125 × (20 − 12) = 1000 m, 곧 1 km야.',
   fb: ['예상은 0.75 km였는데, 실제로는 <b>1.0 km</b>에서 같아졌어. 지표에서 두 값의 차이 8℃가 1 km에 8℃(10 − 2)씩 줄었거든.', '',
     '예상은 1.5 km였는데, 실제로는 <b>1.0 km</b>에서 같아졌어. 지표에서 두 값의 차이 8℃가 1 km에 8℃(10 − 2)씩 줄어 1 km에서 0이 돼.',
     '같아지지 않을 거라고 예상했구나. 기온(1 km에 10℃)이 이슬점(1 km에 2℃)보다 빨리 내려가서 <b>1.0 km</b>에서 둘이 만났어.'],
@@ -1805,7 +1806,7 @@ async function flow1() {
     { face: 'normal', text: '기온과 이슬점이 <b>10℃</b>로 같아졌어. 이제 <b>포화 상태</b>야.' },
     { face: 'happy', text: '이 물방울들이 모여 구름으로 보이는 거구나.' },
     { face: 'normal', text: '나는 여전히 공기 덩어리야. 구름이 된 게 아니라, 내 안에 물방울이 생긴 거지.',
-      more: '<b>상승 응결 고도</b>: 올라가는 공기의 기온이 이슬점과 같아져 응결이 시작되는 높이예요.<br>H(km) = (T₀ − Td₀) / 8 = (20 − 12) / 8 = <b>1 km</b>' },
+      more: '<b>상승 응결 고도</b>: 올라가는 공기의 기온이 이슬점과 같아져 응결이 시작되는 높이예요.<br>H(m) = 125 × (T₀ − Td₀) = 125 × (20 − 12) = <b>1000 m</b> (= 1 km)<br><small>기온과 이슬점의 차이가 125 m 오를 때마다 1℃씩 줄어들기 때문이에요.</small>' },
   ], '기온 = 이슬점(10℃)이 되어 내 안에 물방울이 생겼어. 여기가 상승 응결 고도야.');
   await say([predLine('p1', P1)]);
   await nextStory({ peek: true });
@@ -2033,10 +2034,10 @@ function labPanel(html) { const p = $('labPanel'); p.innerHTML = html; p.classLi
 function labRow(r) {
   const f = foehnTrip(SCENARIO.T0, r.Td, r.M), satLen = Math.max(0, r.M - f.H), eq = Math.abs(r.M - f.H) < 1e-6;
   const note = f.cloud ? `${kf(satLen)} km` : eq ? '0 km (정상에서 막 포화)' : '0 km (응결 고도에 못 미침)';
-  return `<tr><td>${r.Td}℃</td><td>${kf(r.M)} km</td><td>${kf(f.H)} km</td><td>${note}</td><td><b>${nf(f.arrT)}℃</b></td><td>${f.dT > 0 ? '+' : ''}${nf(f.dT)}℃</td></tr>`;
+  return `<tr><td>${r.Td}℃</td><td>${kf(r.M)} km</td><td>${Math.round(f.H * 1000)} m<br><small>(${kf(f.H)} km)</small></td><td>${note}</td><td><b>${nf(f.arrT)}℃</b></td><td>${f.dT > 0 ? '+' : ''}${nf(f.dT)}℃</td></tr>`;
 }
 function labTable(rows) {
-  return `<table class="cmpTbl"><tr><th>출발 이슬점</th><th>산 높이</th><th>상승 응결 고도<br><small>(20 − 이슬점)/8</small></th><th>포화 상태로 오른 구간</th><th>도착 기온</th><th>출발과의 차<br><small>= 5 × 포화 구간</small></th></tr>${rows.join('')}</table>`;
+  return `<table class="cmpTbl"><tr><th>출발 이슬점</th><th>산 높이</th><th>상승 응결 고도<br><small>125 ×<br>(20 − 이슬점)</small></th><th>포화 상태로 오른 구간</th><th>도착 기온</th><th>출발과의 차<br><small>= 5 × 포화 구간</small></th></tr>${rows.join('')}</table>`;
 }
 function labFree() {
   return guard(new Promise(res => {
@@ -2466,7 +2467,7 @@ function showChapterSelect() {
 // 교사용 보기: 장면 바로 열기 · 핵심 설명 다시 보기 · 지금 장면 다시 시작 (서버 없이 이 화면에서만)
 const CONCEPTS = [
   ['단열 팽창', '공기 덩어리가 올라가면 주위 기압이 낮아 부피가 커지고, 주변을 밀어내는 일을 하느라 기온이 내려간다. 불포화 공기: 1 km에 약 10℃ (건조 단열 감률), 이슬점 약 2℃.'],
-  ['상승 응결 고도', '올라가는 공기의 기온이 이슬점과 같아져 응결이 시작되는 높이. H(km) = (T₀ − Td₀)/8 → (20 − 12)/8 = 1 km.'],
+  ['상승 응결 고도', '올라가는 공기의 기온이 이슬점과 같아져 응결이 시작되는 높이. H(m) = 125 × (T₀ − Td₀) → 125 × (20 − 12) = 1000 m = 1 km. (기온과 이슬점의 차이가 125 m에 1℃씩 줄어듦)'],
   ['숨은열(잠열) · 습윤 단열 감률', '수증기가 물방울로 응결할 때 숨은열(잠열)이 나와 포화 공기는 1 km에 약 5℃만 내려간다. 이슬점도 함께 약 5℃.'],
   ['정상에서 바로 불포화로 내려가는 까닭', '물방울이 모두 비로 떨어졌다고 가정(그림 Ⅲ-13). 물방울이 없으면 내려가자마자 기온 +10℃/km, 이슬점 +2℃/km로 벌어져 곧바로 불포화. 물방울이 남아 있으면 증발하는 동안 포화 상태로 천천히 따뜻해진다.'],
   ['응결과 강수', '응결: 수증기 → 물방울(공기 덩어리 안에 생김). 강수: 커진 물방울이 떨어짐. 교과서 모형은 영동 쪽 강수 뒤 정상에서부터 불포화 하강으로 단순화.'],

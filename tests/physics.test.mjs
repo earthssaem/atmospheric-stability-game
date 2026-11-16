@@ -26,7 +26,10 @@ function eqPts(name, got, want) {
 }
 
 // --- 상승 응결 고도: H = ⅛(T − Td) ---
-eq('응결 고도 H = ⅛(20−12) = 1.0 km', lclHeight(SCENARIO.T0, SCENARIO.Td0), 1.0);
+eq('응결 고도 H(m) = 125 × (20−12) = 1000 m = 1.0 km', lclHeight(SCENARIO.T0, SCENARIO.Td0), 1.0);
+eq('응결 고도: 기온과 이슬점 차이 1℃마다 125 m', lclHeight(20, 19) * 1000, 125);
+eq('응결 고도: 이슬점 16℃ → 125 × 4 = 500 m', lclHeight(20, 16) * 1000, 500);
+eq('응결 고도: 이슬점 8℃ → 125 × 12 = 1500 m', lclHeight(20, 8) * 1000, 1500);
 
 // --- 검증 케이스 1: 0.5 km에서 기온 15℃, 이슬점 11℃ (불포화) ---
 const s05 = riseState(20, 12, 0.5);

@@ -96,7 +96,8 @@ await step('교사용 보기: 장면 바로 열기 · 핵심 설명 다시 보�
   for (const k of ['장면 바로 열기', '핵심 설명 다시 보기', '?ch=N', '?debug=1']) if (!t.includes(k)) throw new Error('없음: ' + k);
   if (t.includes('2부') || t.includes('?part=2') || t.includes('대기 안정도')) throw new Error('교사용 보기에 없어진 2부 내용이 남아 있음');
   await click('#overlay [data-c="1"]');
-  if (!(await overlayText()).includes('(20 − 12)/8')) throw new Error('핵심 설명이 펼쳐지지 않음');
+  if (!(await overlayText()).includes('125 × (20 − 12) = 1000 m')) throw new Error('핵심 설명(상승 응결 고도 m 식)이 펼쳐지지 않음');
+  if ((await overlayText()).includes('/8')) throw new Error('예전 km 식(/8)이 남아 있음');
   await click('#tBack');
 });
 
