@@ -291,7 +291,7 @@
   /* 처음 화면: 딱딱하지 않게 — 제목·소제목·버튼은 Jua, 안내 글은 Gowun Dodum */
   .panel.titleP { font-family:var(--f-soft); }
   .panel.titleP h1 { margin-top:8px; letter-spacing:.03em; word-spacing:-.06em; }
-  .panel.titleP .titleSub { font-family:var(--f-deco); font-weight:normal; font-size:clamp(19px,3vh,24px); letter-spacing:.04em; color:#8C6A55; margin:4px 0 0; }   /* 제목과 같은 Jua, 조금 작고 연하게 */
+  .panel.titleP .titleSub { font-family:var(--f-deco); font-weight:normal; font-size:clamp(19px,3vh,24px); letter-spacing:.04em; color:#8C6A55; margin:4px 0 0; line-height:1.35; word-break:keep-all; text-wrap:balance; }   /* 제목과 같은 Jua, 조금 작고 연하게 */
   .panel.titleP .startBtns .btn { font-family:var(--f-deco); font-weight:normal; font-size:clamp(20px,3vh,24px); letter-spacing:.5px; border-radius:18px; }
   .panel.titleP .startBtns .btn small { font-family:var(--f-soft); font-weight:700; letter-spacing:0; }
   .panel.titleP .row2 .btn { font-family:var(--f-deco); font-weight:normal; }
@@ -2427,7 +2427,7 @@ function showTitle() {
   const can = S.started;
   const extra = START_CH ? `<button class="btn sub" id="jumpBtn">${chTitle(START_CH)}부터 시작 ▶</button>` : '';
   panel(`<h1>푄 현상 탐구실</h1>
-    <p class="titleSub">뭉게의 여행</p>
+    <p class="titleSub">산을 넘은 공기는 왜 따뜻하고 건조해질까?</p>
     <div class="titleFace">${titleMunggeSVG()}</div>
     <div class="startBtns">
       <button class="btn" id="newBtn" data-key="1">처음 시작</button>
